@@ -1,0 +1,19 @@
+{
+  "name": "index-coverage-extractor",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Jose Luis Hernando",
+  "license": "MIT",
+  "dependencies": {
+    "fs": "0.0.1-security",
+    "json2csv": "^5.0.6",
+    "playwright": "^1.9.2"
+  }
+}
