@@ -8,7 +8,7 @@
     "start": "node index",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "keywords": ["index coverage report", "search console", "google search console"],
   "author": "Jose Luis Hernando",
   "license": "MIT",
   "dependencies": {
