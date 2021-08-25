@@ -7,12 +7,19 @@
   "scripts": {
     "start": "node index"
   },
-  "keywords": ["index coverage report", "search console", "google search console"],
+  "keywords": [
+    "index coverage report",
+    "search console",
+    "google search console"
+  ],
   "author": "Jose Luis Hernando",
   "license": "MIT",
   "dependencies": {
+    "exceljs": "^4.2.1",
     "fs": "0.0.1-security",
     "json2csv": "^5.0.6",
+    "moment": "^2.29.1",
+    "path": "^0.12.7",
     "playwright": "^1.9.2"
   }
 }

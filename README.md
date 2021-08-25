@@ -1,5 +1,5 @@
 # Google Search Console Index Coverage Extractor
-This script allows users of Google Search Console to extract all the different reports from the [Index Coverage report section](https://support.google.com/webmasters/answer/7440203?hl=en) of the platform. I wrote a blog post about [why I built this script](https://jlhernando.com/blog/index-coverage-extractor/).
+This script allows users of Google Search Console (GSC) to extract all the different reports from the [Index Coverage report section](https://support.google.com/webmasters/answer/7440203?hl=en) of the platform and the [Sitemap Coverage report section](https://support.google.com/webmasters/answer/7451001?hl=en&ref_topic=9456557). I wrote a blog post about [why I built this script](https://jlhernando.com/blog/index-coverage-extractor/).
 
 ## Reports that extracts
 ### Error
@@ -64,8 +64,20 @@ You will see the processing messages in your terminal while the script runs.
 
 ![Index Coverage Extractor in action](https://jlhernando.com/img/index-coverage-headless.jpg "Index Coverage Extractor in action")
 
+## Settings
+The script extracts the "Latest updated" dates that GSC provides. Hence the date can be in two different formats: American date (mm/dd/yyyy) and European date (dd/mm/yyyy). Therefore there is an option to set which date format you would like the script to output the dates:
+![Date format settings for extraction](https://jlhernando.com/img/date-format-settings.png "GSC date format settings for extarction")
+
+The default setting assumes your property shows the dates in European date format (dd/mm/yyyy). If your GSC property shows the dates in American date format then you would need to change ``americanDate = true``. Also if your property is in American date format but you'd like to change it to European date format you can do that by changing ``americanDateChange = true``.
+
 ## Output
-The script will create a "coverage.csv" file and a "summary.csv" file. 
+The script will create a "results.xlsx" file, a "coverage.csv" file and a "summary.csv" file. 
+
+The "results.xlsx" file will contain 3 tabs: 
+- A summary of the index coverage extraction
+- The individual URLs extracted from the Coverage section
+- The individual URLs extracted from the Sitemap section
+![Results Excel report detail](https://jlhernando.com/img/results-excel.png "index coverage report export Excel detail")
 
 The "coverage.csv" will contain all the URLs that have been extracted from each individual coverage report.
 ![Coverage report detail csv](https://jlhernando.com/img/coverage-csv.jpg "index coverage report export detail csv")

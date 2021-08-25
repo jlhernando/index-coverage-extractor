@@ -62,7 +62,7 @@ export const reports = [
   {
     category: 'Warning',
     name: 'Indexed, though blocked by robots.txt',
-    param: 'CAMYGyAE'
+    param: 'CAMYBCAD'
   },
   {
     category: 'Warning',
