@@ -20,6 +20,7 @@ const reportStatus = '.DDFhO' // CSS Selector to extract report status from site
 const results = [] // Empty holding array to push report results
 const summary = [] // Empty holding array to push summary results per report
 const sitemapRes = [] // Empty holding array to push coverage results per sitemap
+const summarySitemaps = [] // Empty holding array to push coverage summary results per sitemap
 
   // Asynchronous IIFE - Immeditaly invoked function expression
   ; (async () => {
@@ -137,7 +138,6 @@ const sitemapRes = [] // Empty holding array to push coverage results per sitema
       })
 
       // Extract sitemap index coverage
-
       const sitemapEndPoint = `https://search.google.com/search-console/sitemaps?resource_id=${resource}`
       await page.goto(sitemapEndPoint)
 
@@ -165,6 +165,24 @@ const sitemapRes = [] // Empty holding array to push coverage results per sitema
         for (const val of reportKeys) {
           sitemapCoverageReports.add(val[0])
         }
+
+        // Get coverage summary of sitemap
+        const sitemapNums = await page.evaluate((origin) => {
+          const topNums = Array.from(document.querySelectorAll('.nnLLaf'))
+          const extractNums = topNums.map(num => num.attributes.title.textContent)
+          const summarySitemapCoverage = {
+            sitemap: origin[0],
+            error: parseInt(extractNums[0].replace(',', '')),
+            'valid with warning': parseInt(extractNums[1].replace(',', '')),
+            valid: parseInt(extractNums[2].replace(',', '')),
+            excluded: parseInt(extractNums[3].replace(',', ''))
+          }
+          return Promise.resolve(summarySitemapCoverage)
+        }, [sitemap])
+
+        // Add individual sitemap summary numbers to summarySitemaps array
+        summarySitemaps.push(sitemapNums);
+
         // Access each individual coverage reports from each sitemap
         for (const key of sitemapCoverageReports) {
           const indReport = `https://search.google.com/search-console/index/drilldown?resource_id=${resource}&item_key=${key}`
@@ -210,13 +228,11 @@ const sitemapRes = [] // Empty holding array to push coverage results per sitema
       await browser.close()
 
       // Parse JSON to CSV
-      const csv = parse(finalResults) // Parse results JSON to CSV
-      writeFile('./coverage.csv', csv) // Write file
-      const sum = parse(summary) // Parse summary JSON to CSV
-      writeFile('./summary.csv', sum) // Write file
-      const sit = parse(finalSitemapRes) // Parse sitemap results from JSON to CSV
-      writeFile('./sitemaps.csv', sit) // Write file
-      console.log('coverage.csv, summary.csv & sitemaps.csv created!')
+      writeFile('./coverage.csv', parse(finalResults)) // Parse results JSON to CSV
+      writeFile('./summary.csv', parse(summary)) // Parse summary JSON to CSV
+      writeFile('./sum-sitemaps.csv', parse(summarySitemaps)) // Write summary sitemap coverage in CSV
+      writeFile('./sitemaps.csv', parse(finalSitemapRes)) // Parse sitemap results from JSON to CSV
+      console.log('All CSV outputs created!')
 
       // Create Excel doc
       const workbook = new Excel.Workbook()
@@ -243,6 +259,7 @@ const sitemapRes = [] // Empty holding array to push coverage results per sitema
       // Create each results tab
       createExcelTab(summary, workbook, 'summary')
       createExcelTab(finalResults, workbook, 'coverage')
+      createExcelTab(summarySitemaps, workbook, 'summary_sitemaps')
       createExcelTab(finalSitemapRes, workbook, 'sitemaps')
 
       // Export Excel File

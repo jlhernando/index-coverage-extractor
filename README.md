@@ -74,9 +74,11 @@ The default setting assumes your property shows the dates in European date forma
 The script will create a "results.xlsx" file, a "coverage.csv" file and a "summary.csv" file. 
 
 The "results.xlsx" file will contain 3 tabs: 
-- A summary of the index coverage extraction
-- The individual URLs extracted from the Coverage section
-- The individual URLs extracted from the Sitemap section
+- A summary of the index coverage extraction.
+- The individual URLs extracted from the Coverage section.
+- A summary of the index coverage extraction from the Sitemap section.
+- The individual URLs extracted from the Sitemap section.
+
 ![Results Excel report detail](https://jlhernando.com/img/results-excel.png "index coverage report export Excel detail")
 
 The "coverage.csv" will contain all the URLs that have been extracted from each individual coverage report.
@@ -85,5 +87,7 @@ The "coverage.csv" will contain all the URLs that have been extracted from each 
 The "summary.csv" will contain the amount of urls per report that have been extracted, the total number that GSC reports in the user interface (either the same or higher) and an "extraction ratio" which is a division between the URLs extracted and the total number of URLs reported by GSC. 
 
 ![Coverage report summary csv](https://jlhernando.com/img/coverage-summary.jpg "index coverage report export summary csv")
-
 This is useful because GSC has an export limit of 1000 rows per report. Hence, the "extraction ratio" may be small compared to the total amount of total URLs within a specific report.
+
+The "sitemap.csv" will contain all the URLs that have been extracted from each individual sitemap coverage report.
+![Coverage report detail csv](https://jlhernando.com/img/coverage-csv.jpg "index coverage report export detail csv")
