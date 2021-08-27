@@ -78,7 +78,7 @@ const summarySitemaps = [] // Empty holding array to push coverage summary resul
         const reportUrls = await page.evaluate(
           ([sel, cat, rep]) => {
             // Extract Last Updated date
-            const updated = document.querySelector('.zTJZxd.zOPr2c').innerText
+            const updated = document.querySelector('.zTJZxd.zOPr2c').innerText ?? 'No date'
 
 
             // Extract URls and build result object
@@ -193,7 +193,7 @@ const summarySitemaps = [] // Empty holding array to push coverage summary resul
             const reportName = document.querySelector(title).innerText
             const status = document.querySelectorAll(cat)
             const statusCheck = status.length > 1 ? status[1].innerText : status[0].innerText
-            const date = document.querySelector('.J54Vt').nextSibling
+            const date = document.querySelector('.J54Vt').nextSibling ?? 'No date'
             const urls = Array.from(document.querySelectorAll(sel)).map(row => {
               return {
                 sitemap: origin,
