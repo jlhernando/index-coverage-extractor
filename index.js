@@ -169,15 +169,23 @@ const summarySitemaps = [] // Empty holding array to push coverage summary resul
         // Get coverage summary of sitemap
         const sitemapNums = await page.evaluate((origin) => {
           const topNums = Array.from(document.querySelectorAll('.nnLLaf'))
-          const extractNums = topNums.map(num => num.attributes.title.textContent)
-          const summarySitemapCoverage = {
+          if (topNums.length > 0) {
+            const extractNums = topNums.map(num => num.attributes.title.textContent)
+            const summarySitemapCoverage = {
+              sitemap: origin[0],
+              error: parseInt(extractNums[0].replace(',', '')),
+              'valid with warning': parseInt(extractNums[1].replace(',', '')),
+              valid: parseInt(extractNums[2].replace(',', '')),
+              excluded: parseInt(extractNums[3].replace(',', ''))
+            }
+            return Promise.resolve(summarySitemapCoverage)
+          } else return Promise.resolve({
             sitemap: origin[0],
-            error: parseInt(extractNums[0].replace(',', '')),
-            'valid with warning': parseInt(extractNums[1].replace(',', '')),
-            valid: parseInt(extractNums[2].replace(',', '')),
-            excluded: parseInt(extractNums[3].replace(',', ''))
-          }
-          return Promise.resolve(summarySitemapCoverage)
+            error: 'Sitemap fetching error',
+            'valid with warning': 'Sitemap fetching error',
+            valid: 'Sitemap fetching error',
+            excluded: 'Sitemap fetching error'
+          })
         }, [sitemap])
 
         // Add individual sitemap summary numbers to summarySitemaps array
@@ -190,7 +198,7 @@ const summarySitemaps = [] // Empty holding array to push coverage summary resul
 
           // Extract report title and URLs from each report
           const indReportUrls = await page.evaluate(([sel, cat, title, origin]) => {
-            const reportName = document.querySelector(title).innerText
+            const reportName = document.querySelector(title).innerText ?? 'No title'
             const status = document.querySelectorAll(cat)
             const statusCheck = status.length > 1 ? status[1].innerText : status[0].innerText
             const date = document.querySelector('.J54Vt').nextSibling ?? 'No date'
@@ -210,6 +218,8 @@ const summarySitemaps = [] // Empty holding array to push coverage summary resul
           sitemapRes.push(...indReportUrls)
 
         }
+        // Force delay between sitemaps checks to prevent GSC detecting automated activity
+        await new Promise(r => setTimeout(r, 4000));
       }
 
       // Change date format from reportUrls objects
