@@ -237,11 +237,15 @@ const summarySitemaps = [] // Empty holding array to push coverage summary resul
       // Close Browser
       await browser.close()
 
-      // Parse JSON to CSV
-      writeFile('./coverage.csv', parse(finalResults)) // Parse results JSON to CSV
-      writeFile('./summary.csv', parse(summary)) // Parse summary JSON to CSV
-      writeFile('./sum-sitemaps.csv', parse(summarySitemaps)) // Write summary sitemap coverage in CSV
-      writeFile('./sitemaps.csv', parse(finalSitemapRes)) // Parse sitemap results from JSON to CSV
+      // Parse JSON to CSV if there is data to parse
+      if (finalResults.length) {
+        writeFile('./coverage.csv', parse(finalResults)) // Parse results JSON to CSV
+        writeFile('./summary.csv', parse(summary)) // Parse summary JSON to CSV
+      }
+      if (finalSitemapRes.length) {
+        writeFile('./sitemaps.csv', parse(finalSitemapRes)) // Parse sitemap results from JSON to CSV
+        writeFile('./sum-sitemaps.csv', parse(summarySitemaps)) // Write summary sitemap coverage in CSV
+      }
       console.log('All CSV outputs created!')
 
       // Create Excel doc

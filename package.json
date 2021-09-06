@@ -1,7 +1,7 @@
 {
   "name": "index-coverage-extractor",
-  "version": "1.0.0",
-  "description": "This script allows users of Google Search Console to extract all the different reports from the Index Coverage report section of the platform.",
+  "version": "2.0.0",
+  "description": "This script allows users of Google Search Console to extract all the different reports from the Index Coverage report section and the Sitemap Coverage report section of the platform.",
   "main": "index.js",
   "type": "module",
   "scripts": {
