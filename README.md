@@ -48,9 +48,10 @@ The script will create a "index-results\_${date}.xlsx" Excel file. The file will
 - A summary of the index coverage extraction from the Sitemap section.
 - The individual URLs extracted from the Sitemap section.
 
-![Results Excel report detail](https://jlhernando.com/img/results-excel.png 'index coverage report export Excel detail')
+![Results Excel report detail](/img/index-coverage-excel-results.png 'index coverage report export Excel detail')
 
 The "coverage.csv" will contain all the URLs that have been extracted from each individual coverage report.
+
 ![Coverage report detail csv](https://jlhernando.com/img/coverage-csv.jpg 'index coverage report export detail csv')
 
 The "summary.csv" will contain the amount of urls per report that have been extracted, the total number that GSC reports in the user interface (either the same or higher) and an "extraction ratio" which is a division between the URLs extracted and the total number of URLs reported by GSC.
@@ -59,6 +60,7 @@ The "summary.csv" will contain the amount of urls per report that have been extr
 This is useful because GSC has an export limit of 1000 rows per report. Hence, the "extraction ratio" may be small compared to the total amount of total URLs within a specific report.
 
 The "sitemap.csv" will contain all the URLs that have been extracted from each individual sitemap coverage report.
+
 ![Coverage report detail csv](https://jlhernando.com/img/coverage-csv.jpg 'index coverage report export detail csv')
 
 The "sum-sitemap.csv" will contain a summary of the top-level coverage numbers per sitemap reported by GSC.
