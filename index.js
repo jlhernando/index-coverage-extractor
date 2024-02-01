@@ -216,11 +216,13 @@ const friendlySiteName = (str) => {
           var rawArray = Array.from(document.querySelectorAll('script[nonce]'), (el) => el.text);
           var ruleNotIndexed = 'ds:11';
           var ruleWarning = 'ds:13';
+		  var ruleCheckNotIndexed = 'ds:10';
 
           // Isolate the right script that match rules
           var notIndexed = rawArray.filter((s) => s.includes(ruleNotIndexed))[1];
           var warning = rawArray.filter((s) => s.includes(ruleWarning))[1];
-          var script = notIndexed.concat(warning);
+		  var checkNotIndexed = rawArray.filter((s) => s.includes(ruleCheckNotIndexed))[1];
+          var script = notIndexed.concat(warning).concat(checkNotIndexed);
           console.log(script);
 
           // Match Report IDs
@@ -463,15 +465,6 @@ const friendlySiteName = (str) => {
           createExcelTab(finalSitemapRes, workbook, `${short}_MAPS`);
         }
       }
-    }
-    // Add indexed summary tab if there was data fro more than 1 property
-    if (indexedSum) {
-      createExcelTab(indexedSum, workbook, `Indexed_summary_ALL`);
-
-      // Add summary tab at the beginning
-      let tabs = workbook.worksheets;
-      let last = tabs.length - 1;
-      tabs[last].orderNo = 0;
     }
     // Close Browser
     await browser.close();
