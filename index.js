@@ -13,7 +13,7 @@ import prompt from 'enquirer'; // Create prompts with more custom options
 import chalk from 'chalk'; // Add colors to console logs
 
 /* Settings */
-const headless = false; // Wether if you want to see the browser automation (false) or not (true) - Default true
+const headless = true; // Wether if you want to see the browser automation (false) or not (true) - Default true
 const sitemapExtract = true; // Wether you want to extract data from sitemaps or not - Default true
 const sites = []; // Holding array for GSC properties
 const indexedSum = []; // Holding array for summary of indexed URLs from all GSC properties
