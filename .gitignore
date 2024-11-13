@@ -1,2 +1,5 @@
 /node_modules*
 archive
+cookies.json
+index-results*
+DOM*

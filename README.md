@@ -4,7 +4,7 @@ This script allows users of Google Search Console (GSC) to extract all the diffe
 
 ## Installing and running the script
 
-The script uses the ECMAScript modules import/export syntax so double check that you are above version 14 to run the script.
+The script uses the ECMAScript modules import/export syntax so double check that you are above version 20 to run the script.
 
 ```bash
 # Check Node version
@@ -33,7 +33,7 @@ Once verified and logged in, the script will extract all the list of GSC propert
 
 ![Select GSC properties](/img/select-gsc-props-terminal.png)
 
-Select one or multiple properties using the spacebar.
+Select one or multiple properties using the spacebar. Move up and down using the arrow keys.
 
 When this is done, your will see the processing messages in your terminal while the script runs.
 
@@ -50,20 +50,20 @@ The script will create a "index-results\_${date}.xlsx" Excel file. The file will
 
 ![Results Excel report detail](/img/index-coverage-excel-results.png 'index coverage report export Excel detail')
 
-The "coverage.csv" will contain all the URLs that have been extracted from each individual coverage report.
+The "sitename_COV" tab and the "coverage.csv" file will contain all the URLs that have been extracted from each individual coverage report. If you have requested a domain property the tab in Excel and the CSV will be precded by DOM.
 
 ![Coverage report detail csv](https://jlhernando.com/img/coverage-csv.jpg 'index coverage report export detail csv')
 
-The "summary.csv" will contain the amount of urls per report that have been extracted, the total number that GSC reports in the user interface (either the same or higher) and an "extraction ratio" which is a division between the URLs extracted and the total number of URLs reported by GSC.
+The "sitename_SUM" tab and the "summary.csv" file will contain the amount of urls per report that have been extracted, the total number that GSC reports in the user interface (either the same or higher) and an "extraction ratio" which is a division between the URLs extracted and the total number of URLs reported by GSC.
 
 ![Coverage report summary csv](https://jlhernando.com/img/coverage-summary.jpg 'index coverage report export summary csv')
 This is useful because GSC has an export limit of 1000 rows per report. Hence, the "extraction ratio" may be small compared to the total amount of total URLs within a specific report.
 
-The "sitemap.csv" will contain all the URLs that have been extracted from each individual sitemap coverage report.
+The "sitename_MAPS" tab and the "sitemap.csv" file will contain all the URLs that have been extracted from each individual sitemap coverage report.
 
 ![Coverage report detail csv](https://jlhernando.com/img/coverage-csv.jpg 'index coverage report export detail csv')
 
-The "sum-sitemap.csv" will contain a summary of the top-level coverage numbers per sitemap reported by GSC.
+The "sitename_SUM_MAPS" tab and the "sum-sitemap.csv" file will contain a summary of the top-level coverage numbers per sitemap reported by GSC.
 
 ## Additional optional settings
 
@@ -88,6 +88,9 @@ const site = 'https://yoursite.com/';
 // OR Multiple properties
 const site = ['https://yoursite.com/', 'sc-domain:yourdomain.com'];
 ```
+
+### Cookies
+After your first login using the tool a `cookies.json` file will be created to avoid the log in process multiple times. If you use multiple accounts remember to delete this file.
 
 ### Headless
 

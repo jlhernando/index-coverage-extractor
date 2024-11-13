@@ -1,6 +1,6 @@
 /* Modules */
 import { email, pass, site } from './credentials.js'; // Import Google Search Credentials - EDIT CREDENTIALS.JS
-import { writeFile, mkdir } from 'fs/promises'; // Module to access the File System - Extract only ones needed
+import { writeFile, mkdir, readFile } from 'fs/promises'; // Module to access the File System - Extract only ones needed
 import { existsSync } from 'fs'; // File System sync
 import { firefox } from 'playwright'; // Choose browser - Currently firefox but you can choose 'chromium' or 'webkit'.
 import { parse } from 'json2csv'; // Convert JSON to CSV
@@ -22,7 +22,9 @@ const americanDateChange = false; // Converts American Date (mm/dd/yy) in GSC to
 const reportSelector = '.OOHai'; // CSS Selector from report Urls
 const reportTitle = '.Iq9klb'; // CSS Selector to extract report name from sitemap coverage reports
 const reportStatus = '.DDFhO'; // CSS Selector to extract report status from sitemap coverage reports
-const warning = chalk.hex('#FFA500');
+const warning = chalk.hex('#FFA500'); // Warning color
+const cookiesPath = './cookies.json'; // Path to cookies file
+const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; // GSC Homepage URL
 
 /* Global functions */
 // Create file system friendly names for properties
@@ -47,98 +49,166 @@ const friendlySiteName = (str) => {
   const browser = await firefox.launch({ headless: headless }); // Switch headless to false if you want to see the broswer automation
   const context = await browser.newContext();
 
+  // Load cookies if they exist
+  if (existsSync(cookiesPath)) {
+    const cookies = JSON.parse(await readFile(cookiesPath, 'utf-8'));
+    await context.addCookies(cookies);
+    console.log('Cookies loaded.');
+  }
+
   // Setup New Page
   let page = await context.newPage();
 
-  // Go to the initial Search Console Page
-  await page.goto('https://search.google.com/search-console/welcome?hl=en');
-
-  // Find and submit Email input
-  let gmail = '';
+  // Check if already logged in by visiting a page that requires authentication
+  await page.goto(gscHomepage);
+  let loggedIn = false;
 
   try {
-    // Check if there is an email in credentials file or let user add email in prompt
-    if (!email) {
-      const rl = readline.createInterface({ input, output });
-      gmail = await rl.question(warning('-> Input your Google Account email: '));
-      rl.close();
-    } else gmail = email;
-
-    // Input email
-    await page.getByRole('textbox', { name: 'Email or phone' }).type(gmail, { delay: 50 });
-    await page.keyboard.press('Enter');
-    console.log('Inputing email...');
-
-    // Check if there was an error message / issue
-    await page.waitForResponse((resp) =>
-      resp.url().includes('https://accounts.google.com/v3/signin/_/AccountsSignInUi/')
-    );
-    if (await page.getByText('Couldn’t find your Google Account').isVisible()) {
-      console.log(
-        chalk.red('Google couldn’t find your Google Account. Check the email you have added and run the script again.')
-      );
-      process.exit();
-    }
+    await page.waitForSelector('text="Welcome to Google Search Console"', { timeout: 2000 });
+    console.log('Already logged in.');
+    loggedIn = true;
   } catch (error) {
-    console.log(chalk.red('There was an issue with you email address.', error));
-    process.exit();
-  }
-  // Find and submit Password input
-  let password = '';
+    console.log('Not logged in, proceeding with login...');
 
-  try {
-    if (!pass) {
-      const rl = readline.createInterface({ input, output });
-      password = await rl.question(warning('-> Input your Google Account password: '));
-      rl.close();
-    } else password = pass;
+    // Find and submit Email input
+    let gmail = '';
 
-    await page.getByRole('textbox', { name: 'Enter your password' }).type(password, { delay: 50 });
-    await page.keyboard.press('Enter');
-    console.log('Inputing password...');
-
-    // Check if there was an error message / issue
-    await page.waitForResponse((resp) =>
-      resp.url().includes('https://accounts.google.com/v3/signin/_/AccountsSignInUi/')
-    );
-    if (await page.getByText('Wrong password').isVisible()) {
-      console.log(chalk.red('Wrong Password. Run the script and try again.'));
-      process.exit();
-    }
-  } catch (error) {
-    console.log(chalk.red('There was an issue with your password: ', error));
-    process.exit();
-  }
-
-  // Detect if there is 2-factor authentication
-  await page.waitForNavigation({ waitUntil: 'load' });
-  const twoStepURL = 'https://accounts.google.com/signin/v2/challenge/';
-  if (page.url().includes(twoStepURL)) {
     try {
-      console.log(
-        warning(
-          'You have 2-step Verification enabled. Check your device to pass to the next step. The script will only wait for 30 seconds'
-        )
+      // Check if there is an email in credentials file or let user add email in prompt
+      if (!email) {
+        const rl = readline.createInterface({ input, output });
+        gmail = await rl.question(warning('-> Input your Google Account email: '));
+        rl.close();
+      } else gmail = email;
+
+      // Input email
+      await page.getByRole('textbox', { name: 'Email or phone' }).type(gmail, { delay: 50 });
+      await page.keyboard.press('Enter');
+      console.log('Inputing email...');
+
+      // Check if there was an error message / issue
+      await page.waitForResponse((resp) =>
+        resp.url().includes('https://accounts.google.com/v3/signin/_/AccountsSignInUi/')
       );
-      // Timeout of 10 seconds so the user can read the log message + 30secs automatic for the next selector
-      await page.waitForTimeout(10000);
-    } catch (e) {
-      console.log(chalk.red('There was an issue with 2-step Verification: ', e));
+      if (await page.getByText('Couldn’t find your Google Account').isVisible()) {
+        console.log(
+          chalk.red('Google couldn’t find your Google Account. Check the email you have added and run the script again.')
+        );
+        process.exit();
+      }
+    } catch (error) {
+      console.log(chalk.red('There was an issue with you email address.', error));
+      process.exit();
     }
-  } else {
-    console.log(chalk.green('No 2-step Verification was detected. Accessing Search Console...'));
+    // Find and submit Password input
+    let password = '';
+
+    try {
+      if (!pass) {
+        const rl = readline.createInterface({ input, output });
+        password = await rl.question(warning('-> Input your Google Account password: '));
+        rl.close();
+      } else password = pass;
+
+      await page.getByRole('textbox', { name: 'Enter your password' }).type(password, { delay: 50 });
+      await page.keyboard.press('Enter');
+      console.log('Inputing password...');
+
+      // Check if there was an error message / issue
+      await page.waitForResponse((resp) =>
+        resp.url().includes('https://accounts.google.com/v3/signin/_/AccountsSignInUi/')
+      );
+      if (await page.getByText('Wrong password').isVisible()) {
+        console.log(chalk.red('Wrong Password. Run the script and try again.'));
+        process.exit();
+      }
+
+      await page.waitForTimeout(2000); // Wait a bit for text to load
+      if (page.url().includes('/challenge/')) {
+        const twoStepVerificationHeading = page.locator('span', { hasText: '2-Step Verification' }).first();
+        if (twoStepVerificationHeading) {
+          try {
+            console.log(
+              warning(
+                'You have 2-step Verification enabled. Check your device to pass to the next step. The script will only wait for 30 seconds'
+              )
+            );
+            console.log('Waiting 30 seconds...');
+
+            // Check if the URL is GSC's Homepage every second for up to 30 seconds
+            let checkDuration = 30000; // 30 seconds
+            let interval = 1000; // 1 second
+            let elapsed = 0;
+
+            while (elapsed < checkDuration) {
+              if (page.url().includes(gscHomepage)) {
+                console.log(chalk.green('URL includes search.google.com. 2-step verification completed.'));
+                break;
+              }
+              await page.waitForTimeout(interval);
+              elapsed += interval;
+            }
+
+            if (elapsed >= checkDuration) {
+              console.log(chalk.red('2-step Verification timeout. Please retry with your verification device ready.'));
+              process.exit();
+            }
+          
+          } catch (e) {
+            console.log(chalk.red('There was an issue with 2-step Verification: ', e));
+            process.exit();
+          }
+        }
+      }
+
+    } catch (error) {
+      console.error(chalk.red('There was an issue with your password: ', error));
+      process.exit();
+
+    }
+
   }
-
-  // Try/Catch block in case the 2-factor auth fails or times out
+  // Wait until GSC property is loaded
+  await page.waitForSelector('text="Welcome to Google Search Console"');
+  console.log(chalk.bgGreen('GSC access sucessful!'));
+  loggedIn = true;
+  // Save cookies after login
   try {
-    // Wait for Welcome URL
-    await page
-      .waitForURL('https://search.google.com/search-console/welcome?hl=en')
-      .catch((err) => console.log('There was an issue with your password: ', err));
-    // Wait until GSC property is loaded
-    await page.waitForSelector('text="Welcome to Google Search Console"');
-    console.log(chalk.bgGreen('GSC access sucessful!'));
+    const cookies = await context.cookies();
+    await writeFile(cookiesPath, JSON.stringify(cookies, null, 2));
+    console.log('Cookies saved.');
+  } catch (error) {
+    console.log(chalk.red('Error saving cookies:', error));
+  }
+  console.log('Logged in after cookies saved');
 
+  // Create Excel doc
+  const workbook = new Excel.Workbook();
+
+  const createExcelTab = async (arr, wb, tabName) => {
+    if (!arr || arr.length === 0) {
+      console.log(chalk.red(`No data available to create Excel tab: ${tabName}`));
+      return;
+    }
+    const headers = Object.keys(arr[0]).map((name) => ({ name, filterButton: true, width: 32 }));
+
+    const sheet = wb.addWorksheet(tabName);
+
+    sheet.addTable({
+      name: tabName,
+      ref: 'A1',
+      headerRow: true,
+      style: {
+        showRowStripes: true,
+      },
+      columns: headers,
+      rows: arr.map((obj) => Object.values(obj)),
+    });
+  };
+
+  // Proceed to the main logic if logged in
+  if (loggedIn) {
+    console.log('Logged in, proceeding with extraction...');
     // Check if there is a site specified in credentials.js
     if (typeof site === 'string' && site.length > 0) sites.push(site);
     if (Array.isArray(site)) sites.push(...site);
@@ -168,31 +238,8 @@ const friendlySiteName = (str) => {
         .catch((e) => console.log(chalk.red('No properties were selected: ', e)));
       sites.push(...selectedProps);
     }
-
-    // Create Excel doc
-    const workbook = new Excel.Workbook();
-
-    const createExcelTab = async (arr, wb, tabName) => {
-      const headers = Object.keys(arr[0]).map((name) => ({ name, filterButton: true, width: 32 }));
-
-      const sheet = wb.addWorksheet(tabName);
-
-      sheet.addTable({
-        name: tabName,
-        ref: 'A1',
-        headerRow: true,
-        style: {
-          showRowStripes: true,
-        },
-        columns: headers,
-        rows: arr.map((obj) => Object.values(obj)),
-      });
-    };
-
     // Loop through site choices
     for (let site of sites) {
-      // // Check if it's a domain property or URL prefix property
-      // if (!site.startsWith('http')) site = 'sc-domain:' + site;
       console.log(chalk.bgCyanBright('Extracting data from: ', site));
 
       /* Data */
@@ -295,6 +342,7 @@ const friendlySiteName = (str) => {
           });
 
           if (param === 'ALL_URLS' && sites.length > 1) {
+            console.log('Adding indexed summary of', sites.length, ' sites');
             indexedSum.push({
               'GSC Property': site,
               status: category,
@@ -464,8 +512,10 @@ const friendlySiteName = (str) => {
         }
       }
     }
-    // Add indexed summary tab if there was data fro more than 1 property
-    if (indexedSum) {
+    // Add indexed summary tab if there was data for more than 1 property
+    if (indexedSum.length) {
+      console.log('Adding indexed summary', indexedSum.length);
+
       createExcelTab(indexedSum, workbook, `Indexed_summary_ALL`);
 
       // Add summary tab at the beginning
@@ -479,8 +529,9 @@ const friendlySiteName = (str) => {
     // Export Excel File
     await workbook.xlsx.writeFile(`index-results_${moment().format('DD-MM-YYYY')}.xlsx`);
     console.log(chalk.bgGreenBright('All data extracted - Find your results in the index-resuls.xlsx file'));
-  } catch (error) {
-    console.log(chalk.bgRedBright(`There was an error running the script: ${error}`));
+
+  } else {
+    console.log(chalk.red('No properties were selected.'));
     process.exit();
   }
 })();
