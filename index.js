@@ -6,10 +6,8 @@ import { chromium } from 'playwright'; // Uses system Chrome for best Google log
 import { reportsNames } from './report-names.js'; // Custom array of objects with specific params to access GSC reports
 import { friendlySiteName, formatDate, currentDate, jsonToCsv } from './utils.js'; // Utility functions
 import Excel from 'exceljs'; // Create Excel docs in JS
-import * as readline from 'node:readline/promises'; // Create native NodeJS user prompts
-import { stdin as input, stdout as output } from 'node:process'; // Create user prompts
-import prompt from 'enquirer'; // Create prompts with more custom options
-import chalk from 'chalk'; // Add colors to console logs
+import * as clack from '@clack/prompts'; // Modern terminal prompts (text, password, multiselect)
+import ansis from 'ansis'; // Terminal colors (lightweight chalk replacement)
 
 /* Settings */
 const headless = false; // Wether if you want to see the browser automation (false) or not (true) - Default true
@@ -21,7 +19,7 @@ const americanDateChange = false; // Converts American Date (mm/dd/yy) in GSC to
 const reportSelector = '.OOHai'; // CSS Selector from report Urls
 const reportTitle = '.Iq9klb'; // CSS Selector to extract report name from sitemap coverage reports
 const reportStatus = '.DDFhO'; // CSS Selector to extract report status from sitemap coverage reports
-const warning = chalk.hex('#FFA500'); // Warning color
+const warning = ansis.hex('#FFA500'); // Warning color
 const profilePath = './chrome-profile'; // Persistent Chrome profile directory — stores cookies, sessions, etc.
 const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; // GSC Homepage URL
 
@@ -42,7 +40,7 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
   // Helper: check if Google blocked the sign-in as "unsafe browser"
   const checkSignInRejected = () => {
     if (page.url().includes('/signin/rejected')) {
-      console.log(chalk.red('\nGoogle blocked the sign-in: "This browser or app may not be secure."'));
+      console.log(ansis.red('\nGoogle blocked the sign-in: "This browser or app may not be secure."'));
       console.log(warning('Try the following:'));
       console.log(warning('  1. Delete the chrome-profile/ folder and run the script again'));
       console.log(warning('  2. Set headless = false in index.js to manually complete the login'));
@@ -70,9 +68,8 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
     try {
       // Check if there is an email in credentials file or let user add email in prompt
       if (!email) {
-        const rl = readline.createInterface({ input, output });
-        gmail = await rl.question(warning('-> Input your Google Account email: '));
-        rl.close();
+        gmail = await clack.text({ message: 'Input your Google Account email:', validate: (v) => v.length === 0 ? 'Email is required' : undefined });
+        if (clack.isCancel(gmail)) { console.log('Cancelled.'); process.exit(); }
       } else gmail = email;
 
       // Input email
@@ -87,7 +84,7 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
       checkSignInRejected();
       if (await page.getByText("Couldn\u2019t find your Google Account").isVisible()) {
         console.log(
-          chalk.red(
+          ansis.red(
             "Google couldn\u2019t find your Google Account. Check the email you have added and run the script again.",
           ),
         );
@@ -95,7 +92,7 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
       }
     } catch (error) {
       checkSignInRejected();
-      console.log(chalk.red('There was an issue with your email address.', error));
+      console.log(ansis.red('There was an issue with your email address.', error));
       process.exit();
     }
     // Find and submit Password input
@@ -103,9 +100,8 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
 
     try {
       if (!pass) {
-        const rl = readline.createInterface({ input, output });
-        password = await rl.question(warning('-> Input your Google Account password: '));
-        rl.close();
+        password = await clack.password({ message: 'Input your Google Account password:', validate: (v) => v.length === 0 ? 'Password is required' : undefined });
+        if (clack.isCancel(password)) { console.log('Cancelled.'); process.exit(); }
       } else password = pass;
 
       await page.getByRole('textbox', { name: 'Enter your password' }).pressSequentially(password, { delay: 50 });
@@ -118,7 +114,7 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
       );
       checkSignInRejected();
       if (await page.getByText('Wrong password').isVisible()) {
-        console.log(chalk.red('Wrong Password. Run the script and try again.'));
+        console.log(ansis.red('Wrong Password. Run the script and try again.'));
         process.exit();
       }
 
@@ -144,7 +140,7 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
             while (elapsed < checkDuration) {
               checkSignInRejected();
               if (page.url().includes('search.google.com')) {
-                console.log(chalk.green('2-step verification completed.'));
+                console.log(ansis.green('2-step verification completed.'));
                 break;
               }
               await new Promise((r) => setTimeout(r, interval));
@@ -152,26 +148,26 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
             }
 
             if (elapsed >= checkDuration) {
-              console.log(chalk.red('2-step Verification timeout. Please retry with your verification device ready.'));
+              console.log(ansis.red('2-step Verification timeout. Please retry with your verification device ready.'));
               process.exit();
             }
           } catch (e) {
             checkSignInRejected();
-            console.log(chalk.red('There was an issue with 2-step Verification: ', e));
+            console.log(ansis.red('There was an issue with 2-step Verification: ', e));
             process.exit();
           }
         }
       }
     } catch (error) {
       checkSignInRejected();
-      console.error(chalk.red('There was an issue with your password: ', error));
+      console.error(ansis.red('There was an issue with your password: ', error));
       process.exit();
     }
   }
   // Wait until GSC property is loaded
   checkSignInRejected();
   await page.getByText('Welcome to Google Search Console').waitFor({ state: 'visible' });
-  console.log(chalk.bgGreen('GSC access sucessful!'));
+  console.log(ansis.bgGreen('GSC access sucessful!'));
   loggedIn = true;
 
   // Create Excel doc
@@ -179,7 +175,7 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
 
   const createExcelTab = async (arr, wb, tabName) => {
     if (!arr || arr.length === 0) {
-      console.log(chalk.red(`No data available to create Excel tab: ${tabName}`));
+      console.log(ansis.red(`No data available to create Excel tab: ${tabName}`));
       return;
     }
     const headers = Object.keys(arr[0]).map((name) => ({ name, filterButton: true, width: 32 }));
@@ -220,19 +216,20 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
       });
 
       // Select properties you want to extract data from
-      const promptMulti = new prompt.MultiSelect({
-        name: 'gscprops',
+      const selectedProps = await clack.multiselect({
         message: 'Select properties (min. 1)',
-        choices: gscProps,
+        options: gscProps.map((p) => ({ value: p, label: p })),
+        required: true,
       });
-      const selectedProps = await promptMulti
-        .run()
-        .catch((e) => console.log(chalk.red('No properties were selected: ', e)));
+      if (clack.isCancel(selectedProps)) {
+        console.log(ansis.red('No properties were selected.'));
+        process.exit();
+      }
       sites.push(...selectedProps);
     }
     // Loop through site choices
     for (let site of sites) {
-      console.log(chalk.bgCyanBright('Extracting data from: ', site));
+      console.log(ansis.bgCyanBright('Extracting data from: ', site));
 
       /* Data */
       const resource = encodeURIComponent(site); // Encode it to create the correct URL
@@ -361,7 +358,7 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
       if (finalResults.length) {
         writeFile(`./${file}/coverage_${file}_${currentDate()}.csv`, jsonToCsv(finalResults));
         writeFile(`./${file}/summary_${file}_${currentDate()}.csv`, jsonToCsv(summary));
-        console.log(chalk.green('URL Coverage CSV outputs created!'));
+        console.log(ansis.green('URL Coverage CSV outputs created!'));
       }
 
       // Add data to Excel doc as tabs
@@ -387,7 +384,7 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
           )}`;
           // Go to Sitemap report and log URL
           const reportPage = await page.goto(sitemapReport);
-          console.log(chalk.bgBlue(`Extracting coverage data from sitemap: ${sitemap}`));
+          console.log(ansis.bgBlue(`Extracting coverage data from sitemap: ${sitemap}`));
           // Intercept Doc Network request (raw HTML)
           if (!reportPage) throw new Error(`Navigation returned null for ${sitemapReport}`);
           const source = await reportPage.text();
@@ -496,7 +493,7 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
         if (finalSitemapRes.length) {
           writeFile(`./${file}/sitemaps-${file}_${currentDate()}.csv`, jsonToCsv(finalSitemapRes));
           writeFile(`./${file}/sum-sitemaps-${file}_${currentDate()}.csv`, jsonToCsv(summarySitemaps));
-          console.log(chalk.green('Sitemap CSV outputs created!'));
+          console.log(ansis.green('Sitemap CSV outputs created!'));
           // Add sitemap data to Excel doc as tabs
           createExcelTab(summarySitemaps, workbook, `${short}_SUM_MAPS`);
           createExcelTab(finalSitemapRes, workbook, `${short}_MAPS`);
@@ -519,9 +516,9 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
 
     // Export Excel File
     await workbook.xlsx.writeFile(`index-results_${currentDate()}.xlsx`);
-    console.log(chalk.bgGreenBright('All data extracted - Find your results in the index-resuls.xlsx file'));
+    console.log(ansis.bgGreenBright('All data extracted - Find your results in the index-resuls.xlsx file'));
   } else {
-    console.log(chalk.red('No properties were selected.'));
+    console.log(ansis.red('No properties were selected.'));
     process.exit();
   }
 })();

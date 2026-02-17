@@ -16,8 +16,8 @@
   "author": "Jose Luis Hernando",
   "license": "MIT",
   "dependencies": {
-    "chalk": "^5.6.2",
-    "enquirer": "^2.4.1",
+    "@clack/prompts": "^1.0.1",
+    "ansis": "^4.2.0",
     "exceljs": "^4.4.0",
     "playwright": "^1.50.0"
   }
