@@ -2,36 +2,45 @@
 
 ## Project Overview
 
-**Google Search Console Index Coverage Extractor** (v2.1.0) — A Node.js script that automates the extraction of Index Coverage and Sitemap Coverage reports from Google Search Console (GSC) using Playwright browser automation.
+**Google Search Console Index Coverage Extractor** (v3.0.0) — A Node.js script that automates the extraction of Index Coverage and Sitemap Coverage reports from Google Search Console (GSC) using Playwright browser automation with system Chrome.
 
-Author: Jose Luis Hernando | License: MIT | Runtime: Node.js (ESM)
+Author: Jose Luis Hernando | License: MIT | Runtime: Node.js (ESM, v20+)
 
 ## Architecture & Key Files
 
 | File | Purpose |
 |------|---------|
-| `index.js` | Main script — single async IIFE (~537 lines). Handles login, scraping, and output. |
+| `index.js` | Main script — single async IIFE (~527 lines). Handles login, scraping, and output. |
+| `utils.js` | Utility functions: `friendlySiteName`, `formatDate`, `currentDate`, `jsonToCsv`. |
 | `credentials.js` | Exports `email`, `pass`, `site` — user fills in GSC credentials (or leaves blank for terminal prompts). |
 | `report-names.js` | Maps GSC internal report IDs (e.g. `CAMYASAB`) to human-readable names (e.g. "Submitted and indexed"). |
-| `package.json` | ESM module (`"type": "module"`), entry point: `node index`. |
-| `.gitignore` | Ignores `node_modules`, `cookies.json`, output files (`index-results*`, `DOM*`). |
+| `test/utils.test.js` | 29 unit tests for utility functions (Node.js built-in test runner). |
+| `package.json` | ESM module (`"type": "module"`), scripts: `start`, `test`, `reset`. |
+| `.gitignore` | Ignores `node_modules`, `cookies.json`, `chrome-profile/`, output files (`index-results*`, `DOM*`). |
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `npm start` | Run the extractor |
+| `npm test` | Run 29 unit tests |
+| `npm run reset` | Clear browser session (to switch Google accounts) |
 
 ## How It Works
 
-1. **Launch browser** — Firefox via Playwright (headless by default).
-2. **Authentication** — Loads saved `cookies.json` if present; otherwise prompts for email/password. Supports 2-Step Verification (30s timeout).
-3. **Save cookies** — After successful login, saves cookies to `cookies.json` for future runs.
-4. **Discover properties** — If `site` is not set in `credentials.js`, scrapes the GSC welcome page for available properties and presents a multi-select prompt.
-5. **Extract Index Coverage** — For each property:
+1. **Launch browser** — System Chrome via Playwright `launchPersistentContext` with anti-detection flags.
+2. **Authentication** — Uses persistent `chrome-profile/` directory for session storage. On first run, prompts for email/password via `@clack/prompts` (masked password input). Supports 2-Step Verification (30s timeout). Detects Google sign-in rejection with clear troubleshooting steps.
+3. **Discover properties** — If `site` is not set in `credentials.js`, scrapes the GSC welcome page for available properties and presents a multi-select prompt.
+4. **Extract Index Coverage** — For each property:
    - Navigates to the Index Coverage page.
    - Extracts available report IDs from embedded `<script>` tags (pattern: `ds:11`, `ds:13`).
    - Loops through each report, scraping URLs via CSS selector `.OOHai`.
    - Builds summary stats (extracted count vs. GSC total, extraction ratio).
-6. **Extract Sitemap Coverage** (optional, `sitemapExtract = true`):
+5. **Extract Sitemap Coverage** (optional, `sitemapExtract = true`):
    - Navigates to Sitemaps page, extracts sitemap list.
    - For each sitemap: extracts coverage summary numbers + individual report URLs.
    - 4-second delay between sitemaps to avoid detection.
-7. **Output** — Generates CSV files per property folder + a single Excel workbook (`index-results_DD-MM-YYYY.xlsx`) with tabs per property.
+6. **Output** — Generates CSV files per property folder + a single Excel workbook (`index-results_DD-MM-YYYY.xlsx`) with tabs per property.
 
 ## Configuration (variables in index.js)
 
@@ -61,24 +70,21 @@ index-results_{date}.xlsx           — Excel workbook with all data as tabs:
   Indexed_summary_ALL — Cross-property indexed summary (when >1 property)
 ```
 
-## Dependencies
+## Dependencies (4 total)
 
 | Package | Usage |
 |---------|-------|
-| `playwright` (1.30.0-alpha) | Browser automation (Firefox) |
-| `exceljs` | Excel workbook generation |
-| `json2csv` | JSON → CSV conversion |
-| `chalk` | Colored terminal output |
-| `enquirer` | Multi-select property picker |
-| `moment` | Date formatting (deprecated — dayjs available as transitive dep) |
+| `playwright` (^1.50) | Browser automation (system Chrome via `launchPersistentContext`) |
+| `exceljs` (^4.4) | Excel workbook generation |
+| `ansis` (^4.2) | Terminal colors — lightweight chalk replacement with hex() support |
+| `@clack/prompts` (^1.0) | Terminal prompts — text, password (masked), multiselect |
 
 ## Dev Notes
 
-- **No tests, no build step, no TypeScript** — single-file script.
-- **Run**: `npm start` (or `node index`).
-- **Playwright version is outdated** — uses alpha from Dec 2022.
+- **29 unit tests** via `node --test` — covers utils.js functions.
+- **No build step, no TypeScript** — ESM JavaScript.
 - **CSS selectors are fragile** — GSC UI changes can break scraping.
-- **No .gitignore entry for `.claude/` or `CLAUDE.md`** — these are untracked.
+- **Session persistence** — `chrome-profile/` stores browser state; `npm run reset` clears it.
 
 ---
 

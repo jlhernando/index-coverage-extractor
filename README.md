@@ -33,11 +33,13 @@ Select one or multiple properties using the spacebar. Move up and down using the
 
 When this is done, your will see the processing messages in your terminal while the script runs.
 
-### Running tests
+### Available commands
 
-```bash
-npm test
-```
+| Command | Description |
+|---------|-------------|
+| `npm start` | Run the extractor |
+| `npm test` | Run unit tests (29 tests) |
+| `npm run reset` | Clear browser session (to switch Google accounts) |
 
 ## Output
 
@@ -84,7 +86,11 @@ const site = ['https://yoursite.com/', 'sc-domain:yourdomain.com'];
 
 The script uses a persistent Chrome profile stored in `chrome-profile/` directory. After your first login, the session is saved automatically — you won't need to log in again on subsequent runs.
 
-If you use multiple Google accounts or need to re-login, delete the `chrome-profile/` folder and run the script again.
+If you use multiple Google accounts or need to re-login, run:
+
+```bash
+npm run reset
+```
 
 ### Headless
 
