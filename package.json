@@ -1,11 +1,12 @@
 {
   "name": "index-coverage-extractor",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "description": "This script allows users of Google Search Console to extract all the different reports from the Index Coverage report section and the Sitemap Coverage report section of the platform.",
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node index"
+    "start": "node index",
+    "test": "node --test"
   },
   "keywords": [
     "index coverage report",
@@ -15,13 +16,9 @@
   "author": "Jose Luis Hernando",
   "license": "MIT",
   "dependencies": {
-    "chalk": "^5.2.0",
-    "enquirer": "^2.3.6",
-    "exceljs": "^4.2.1",
-    "fs": "0.0.1-security",
-    "json2csv": "^5.0.6",
-    "moment": "^2.29.1",
-    "path": "^0.12.7",
-    "playwright": "^1.30.0-alpha-dec-23-2022"
+    "chalk": "^5.6.2",
+    "enquirer": "^2.4.1",
+    "exceljs": "^4.4.0",
+    "playwright": "^1.50.0"
   }
 }

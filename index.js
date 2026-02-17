@@ -3,10 +3,9 @@ import { email, pass, site } from './credentials.js'; // Import Google Search Cr
 import { writeFile, mkdir, readFile } from 'fs/promises'; // Module to access the File System - Extract only ones needed
 import { existsSync } from 'fs'; // File System sync
 import { firefox } from 'playwright'; // Choose browser - Currently firefox but you can choose 'chromium' or 'webkit'.
-import { parse } from 'json2csv'; // Convert JSON to CSV
 import { reportsNames } from './report-names.js'; // Custom array of objects with specific params to access GSC reports
+import { friendlySiteName, formatDate, currentDate, jsonToCsv } from './utils.js'; // Utility functions
 import Excel from 'exceljs'; // Create Excel docs in JS
-import moment from 'moment'; // Handle dates easily
 import * as readline from 'node:readline/promises'; // Create native NodeJS user prompts
 import { stdin as input, stdout as output } from 'node:process'; // Create user prompts
 import prompt from 'enquirer'; // Create prompts with more custom options
@@ -25,21 +24,6 @@ const reportStatus = '.DDFhO'; // CSS Selector to extract report status from sit
 const warning = chalk.hex('#FFA500'); // Warning color
 const cookiesPath = './cookies.json'; // Path to cookies file
 const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; // GSC Homepage URL
-
-/* Global functions */
-// Create file system friendly names for properties
-const friendlySiteName = (str) => {
-  const friendlystr = str
-    .replace(/(http.*:\/\/)/g, '')
-    .replace(/(sc-domain)/g, 'DOM')
-    .replace(/\//g, '_')
-    .replace(/\_$/g, '')
-    .replaceAll(/\.|:/g, '_');
-
-  const short = friendlystr.slice(0, 22); // To fit Excel tab char limit
-
-  return { file: friendlystr, short };
-};
 
 // Asynchronous IIFE - Immeditaly invoked function expression
 (async () => {
@@ -64,7 +48,7 @@ const friendlySiteName = (str) => {
   let loggedIn = false;
 
   try {
-    await page.waitForSelector('text="Welcome to Google Search Console"', { timeout: 2000 });
+    await page.getByText('Welcome to Google Search Console').waitFor({ state: 'visible', timeout: 2000 });
     console.log('Already logged in.');
     loggedIn = true;
   } catch (error) {
@@ -82,7 +66,7 @@ const friendlySiteName = (str) => {
       } else gmail = email;
 
       // Input email
-      await page.getByRole('textbox', { name: 'Email or phone' }).type(gmail, { delay: 50 });
+      await page.getByRole('textbox', { name: 'Email or phone' }).pressSequentially(gmail, { delay: 50 });
       await page.keyboard.press('Enter');
       console.log('Inputing email...');
 
@@ -110,7 +94,7 @@ const friendlySiteName = (str) => {
         rl.close();
       } else password = pass;
 
-      await page.getByRole('textbox', { name: 'Enter your password' }).type(password, { delay: 50 });
+      await page.getByRole('textbox', { name: 'Enter your password' }).pressSequentially(password, { delay: 50 });
       await page.keyboard.press('Enter');
       console.log('Inputing password...');
 
@@ -123,7 +107,7 @@ const friendlySiteName = (str) => {
         process.exit();
       }
 
-      await page.waitForTimeout(2000); // Wait a bit for text to load
+      await new Promise((r) => setTimeout(r, 2000)); // Wait a bit for text to load
       if (page.url().includes('/challenge/')) {
         const twoStepVerificationHeading = page.locator('span', { hasText: '2-Step Verification' }).first();
         if (twoStepVerificationHeading) {
@@ -145,7 +129,7 @@ const friendlySiteName = (str) => {
                 console.log(chalk.green('URL includes search.google.com. 2-step verification completed.'));
                 break;
               }
-              await page.waitForTimeout(interval);
+              await new Promise((r) => setTimeout(r, interval));
               elapsed += interval;
             }
 
@@ -169,7 +153,7 @@ const friendlySiteName = (str) => {
 
   }
   // Wait until GSC property is loaded
-  await page.waitForSelector('text="Welcome to Google Search Console"');
+  await page.getByText('Welcome to Google Search Console').waitFor({ state: 'visible' });
   console.log(chalk.bgGreen('GSC access sucessful!'));
   loggedIn = true;
   // Save cookies after login
@@ -357,19 +341,18 @@ const friendlySiteName = (str) => {
       // Change date format from reportUrls objects
       const finalResults = results.map(({ updated, ...rest }) => {
         if (americanDate) {
-          const lastUpdated = moment(updated, 'MM-DD-YYYY').format('DD-MM-YYYY');
-          const americanlastUpdated = moment(updated, 'MM-DD-YYYY').format('MM-DD-YYYY');
-          return { ...rest, 'last updated': americanDateChange ? lastUpdated : americanlastUpdated };
+          const lastUpdated = formatDate(updated, 'MM-DD-YYYY', americanDateChange ? 'DD-MM-YYYY' : 'MM-DD-YYYY');
+          return { ...rest, 'last updated': lastUpdated };
         } else {
-          const lastUpdated = moment(updated, 'DD-MM-YYYY').format('DD-MM-YYYY');
+          const lastUpdated = formatDate(updated, 'DD-MM-YYYY', 'DD-MM-YYYY');
           return { ...rest, 'last updated': lastUpdated };
         }
       });
 
       // Parse JSON to CSV if there is data to parse
       if (finalResults.length) {
-        writeFile(`./${file}/coverage_${file}_${moment().format('DD-MM-YYYY')}.csv`, parse(finalResults)); // Parse results JSON to CSV
-        writeFile(`./${file}/summary_${file}_${moment().format('DD-MM-YYYY')}.csv`, parse(summary)); // Parse summary JSON to CSV
+        writeFile(`./${file}/coverage_${file}_${currentDate()}.csv`, jsonToCsv(finalResults));
+        writeFile(`./${file}/summary_${file}_${currentDate()}.csv`, jsonToCsv(summary));
         console.log(chalk.green('URL Coverage CSV outputs created!'));
       }
 
@@ -397,7 +380,8 @@ const friendlySiteName = (str) => {
           // Go to Sitemap report and log URL
           const reportPage = await page.goto(sitemapReport);
           console.log(chalk.bgBlue(`Extracting coverage data from sitemap: ${sitemap}`));
-          // Intercept Doc Netowork request (raw HTML)
+          // Intercept Doc Network request (raw HTML)
+          if (!reportPage) throw new Error(`Navigation returned null for ${sitemapReport}`);
           const source = await reportPage.text();
           // Find individual sitemap report keys (IDs) through pattern
           const reportKeys = [...source.matchAll(/CAES\w+/g)];
@@ -493,18 +477,17 @@ const friendlySiteName = (str) => {
         // Change date format from reportUrls objects
         const finalSitemapRes = sitemapRes.map(({ date, ...rest }) => {
           if (americanDate) {
-            const americanlastUpdated = moment(date, 'MM-DD-YYYY').format('MM-DD-YYYY');
-            const lastUpdated = moment(date, 'MM-DD-YYYY').format('DD-MM-YYYY');
-            return { ...rest, 'last updated': americanDateChange ? lastUpdated : americanlastUpdated };
+            const lastUpdated = formatDate(date, 'MM-DD-YYYY', americanDateChange ? 'DD-MM-YYYY' : 'MM-DD-YYYY');
+            return { ...rest, 'last updated': lastUpdated };
           } else {
-            const lastUpdated = moment(date, 'DD-MM-YYYY').format('DD-MM-YYYY');
+            const lastUpdated = formatDate(date, 'DD-MM-YYYY', 'DD-MM-YYYY');
             return { ...rest, 'last updated': lastUpdated };
           }
         });
         // Write summary sitemap coverage in CSV
         if (finalSitemapRes.length) {
-          writeFile(`./${file}/sitemaps-${file}_${moment().format('DD-MM-YYYY')}.csv`, parse(finalSitemapRes)); // Parse sitemap results from JSON to CSV
-          writeFile(`./${file}/sum-sitemaps-${file}_${moment().format('DD-MM-YYYY')}.csv`, parse(summarySitemaps));
+          writeFile(`./${file}/sitemaps-${file}_${currentDate()}.csv`, jsonToCsv(finalSitemapRes));
+          writeFile(`./${file}/sum-sitemaps-${file}_${currentDate()}.csv`, jsonToCsv(summarySitemaps));
           console.log(chalk.green('Sitemap CSV outputs created!'));
           // Add sitemap data to Excel doc as tabs
           createExcelTab(summarySitemaps, workbook, `${short}_SUM_MAPS`);
@@ -527,7 +510,7 @@ const friendlySiteName = (str) => {
     await browser.close();
 
     // Export Excel File
-    await workbook.xlsx.writeFile(`index-results_${moment().format('DD-MM-YYYY')}.xlsx`);
+    await workbook.xlsx.writeFile(`index-results_${currentDate()}.xlsx`);
     console.log(chalk.bgGreenBright('All data extracted - Find your results in the index-resuls.xlsx file'));
 
   } else {
