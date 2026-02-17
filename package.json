@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node index",
-    "test": "node --test"
+    "test": "node --test",
+    "reset": "rm -rf chrome-profile && echo 'Session cleared. Run npm start to log in again.'"
   },
   "keywords": [
     "index coverage report",
