@@ -1,5 +1,6 @@
 /node_modules*
 archive
 cookies.json
+chrome-profile/
 index-results*
 DOM*

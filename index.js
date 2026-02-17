@@ -1,8 +1,8 @@
 /* Modules */
 import { email, pass, site } from './credentials.js'; // Import Google Search Credentials - EDIT CREDENTIALS.JS
-import { writeFile, mkdir, readFile } from 'fs/promises'; // Module to access the File System - Extract only ones needed
+import { writeFile, mkdir } from 'fs/promises'; // Module to access the File System - Extract only ones needed
 import { existsSync } from 'fs'; // File System sync
-import { firefox } from 'playwright'; // Choose browser - Currently firefox but you can choose 'chromium' or 'webkit'.
+import { chromium } from 'playwright'; // Uses system Chrome for best Google login compatibility
 import { reportsNames } from './report-names.js'; // Custom array of objects with specific params to access GSC reports
 import { friendlySiteName, formatDate, currentDate, jsonToCsv } from './utils.js'; // Utility functions
 import Excel from 'exceljs'; // Create Excel docs in JS
@@ -12,7 +12,7 @@ import prompt from 'enquirer'; // Create prompts with more custom options
 import chalk from 'chalk'; // Add colors to console logs
 
 /* Settings */
-const headless = true; // Wether if you want to see the browser automation (false) or not (true) - Default true
+const headless = false; // Wether if you want to see the browser automation (false) or not (true) - Default true
 const sitemapExtract = true; // Wether you want to extract data from sitemaps or not - Default true
 const sites = []; // Holding array for GSC properties
 const indexedSum = []; // Holding array for summary of indexed URLs from all GSC properties
@@ -22,33 +22,43 @@ const reportSelector = '.OOHai'; // CSS Selector from report Urls
 const reportTitle = '.Iq9klb'; // CSS Selector to extract report name from sitemap coverage reports
 const reportStatus = '.DDFhO'; // CSS Selector to extract report status from sitemap coverage reports
 const warning = chalk.hex('#FFA500'); // Warning color
-const cookiesPath = './cookies.json'; // Path to cookies file
+const profilePath = './chrome-profile'; // Persistent Chrome profile directory — stores cookies, sessions, etc.
 const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; // GSC Homepage URL
 
 // Asynchronous IIFE - Immeditaly invoked function expression
 (async () => {
   console.log('Launching browser...'); // Initial log to let the user know the script is running
 
-  // Setup browser
-  const browser = await firefox.launch({ headless: headless }); // Switch headless to false if you want to see the broswer automation
-  const context = await browser.newContext();
-
-  // Load cookies if they exist
-  if (existsSync(cookiesPath)) {
-    const cookies = JSON.parse(await readFile(cookiesPath, 'utf-8'));
-    await context.addCookies(cookies);
-    console.log('Cookies loaded.');
-  }
+  // Setup browser with persistent profile (avoids Google detecting automation)
+  const context = await chromium.launchPersistentContext(profilePath, {
+    headless: headless,
+    channel: 'chrome',
+    args: ['--disable-blink-features=AutomationControlled'],
+  });
 
   // Setup New Page
-  let page = await context.newPage();
+  let page = context.pages()[0] || await context.newPage();
+
+  // Helper: check if Google blocked the sign-in as "unsafe browser"
+  const checkSignInRejected = () => {
+    if (page.url().includes('/signin/rejected')) {
+      console.log(chalk.red('\nGoogle blocked the sign-in: "This browser or app may not be secure."'));
+      console.log(warning('Try the following:'));
+      console.log(warning('  1. Delete the chrome-profile/ folder and run the script again'));
+      console.log(warning('  2. Set headless = false in index.js to manually complete the login'));
+      console.log(warning('  3. If using 2FA, try generating an app-specific password'));
+      process.exit(1);
+    }
+  };
 
   // Check if already logged in by visiting a page that requires authentication
   await page.goto(gscHomepage);
+  await new Promise((r) => setTimeout(r, 2000)); // Wait for redirects to settle
+  checkSignInRejected();
   let loggedIn = false;
 
   try {
-    await page.getByText('Welcome to Google Search Console').waitFor({ state: 'visible', timeout: 2000 });
+    await page.getByText('Welcome to Google Search Console').waitFor({ state: 'visible', timeout: 3000 });
     console.log('Already logged in.');
     loggedIn = true;
   } catch (error) {
@@ -72,16 +82,20 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
 
       // Check if there was an error message / issue
       await page.waitForResponse((resp) =>
-        resp.url().includes('https://accounts.google.com/v3/signin/_/AccountsSignInUi/')
+        resp.url().includes('https://accounts.google.com/v3/signin/_/AccountsSignInUi/'),
       );
-      if (await page.getByText('Couldn’t find your Google Account').isVisible()) {
+      checkSignInRejected();
+      if (await page.getByText("Couldn\u2019t find your Google Account").isVisible()) {
         console.log(
-          chalk.red('Google couldn’t find your Google Account. Check the email you have added and run the script again.')
+          chalk.red(
+            "Google couldn\u2019t find your Google Account. Check the email you have added and run the script again.",
+          ),
         );
         process.exit();
       }
     } catch (error) {
-      console.log(chalk.red('There was an issue with you email address.', error));
+      checkSignInRejected();
+      console.log(chalk.red('There was an issue with your email address.', error));
       process.exit();
     }
     // Find and submit Password input
@@ -100,22 +114,25 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
 
       // Check if there was an error message / issue
       await page.waitForResponse((resp) =>
-        resp.url().includes('https://accounts.google.com/v3/signin/_/AccountsSignInUi/')
+        resp.url().includes('https://accounts.google.com/v3/signin/_/AccountsSignInUi/'),
       );
+      checkSignInRejected();
       if (await page.getByText('Wrong password').isVisible()) {
         console.log(chalk.red('Wrong Password. Run the script and try again.'));
         process.exit();
       }
 
       await new Promise((r) => setTimeout(r, 2000)); // Wait a bit for text to load
+      checkSignInRejected();
+
       if (page.url().includes('/challenge/')) {
         const twoStepVerificationHeading = page.locator('span', { hasText: '2-Step Verification' }).first();
         if (twoStepVerificationHeading) {
           try {
             console.log(
               warning(
-                'You have 2-step Verification enabled. Check your device to pass to the next step. The script will only wait for 30 seconds'
-              )
+                'You have 2-step Verification enabled. Check your device to pass to the next step. The script will only wait for 30 seconds',
+              ),
             );
             console.log('Waiting 30 seconds...');
 
@@ -125,8 +142,9 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
             let elapsed = 0;
 
             while (elapsed < checkDuration) {
-              if (page.url().includes(gscHomepage)) {
-                console.log(chalk.green('URL includes search.google.com. 2-step verification completed.'));
+              checkSignInRejected();
+              if (page.url().includes('search.google.com')) {
+                console.log(chalk.green('2-step verification completed.'));
                 break;
               }
               await new Promise((r) => setTimeout(r, interval));
@@ -137,34 +155,24 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
               console.log(chalk.red('2-step Verification timeout. Please retry with your verification device ready.'));
               process.exit();
             }
-          
           } catch (e) {
+            checkSignInRejected();
             console.log(chalk.red('There was an issue with 2-step Verification: ', e));
             process.exit();
           }
         }
       }
-
     } catch (error) {
+      checkSignInRejected();
       console.error(chalk.red('There was an issue with your password: ', error));
       process.exit();
-
     }
-
   }
   // Wait until GSC property is loaded
+  checkSignInRejected();
   await page.getByText('Welcome to Google Search Console').waitFor({ state: 'visible' });
   console.log(chalk.bgGreen('GSC access sucessful!'));
   loggedIn = true;
-  // Save cookies after login
-  try {
-    const cookies = await context.cookies();
-    await writeFile(cookiesPath, JSON.stringify(cookies, null, 2));
-    console.log('Cookies saved.');
-  } catch (error) {
-    console.log(chalk.red('Error saving cookies:', error));
-  }
-  console.log('Logged in after cookies saved');
 
   // Create Excel doc
   const workbook = new Excel.Workbook();
@@ -271,7 +279,7 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
 
           return reports;
         },
-        [site]
+        [site],
       );
 
       console.log(`Found ${reportIDs.length} reports`);
@@ -299,7 +307,7 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
             }));
             return Promise.resolve(arr);
           },
-          [reportSelector, category, param]
+          [reportSelector, category, param],
         );
 
         // Push urls from each report into results array for future CSV rows
@@ -375,7 +383,7 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
         for (const sitemap of sitemaps) {
           // Individual sitemap report
           const sitemapReport = `https://search.google.com/search-console/index?resource_id=${resource}&pages=SITEMAP&sitemap=${encodeURIComponent(
-            sitemap
+            sitemap,
           )}`;
           // Go to Sitemap report and log URL
           const reportPage = await page.goto(sitemapReport);
@@ -411,7 +419,7 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
                   indexed: 'Sitemap fetching error',
                 });
             },
-            [sitemap]
+            [sitemap],
           );
 
           // Add individual sitemap summary numbers to summarySitemaps array
@@ -419,7 +427,7 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
 
           // Access & Extract Indexed URLs from sitemap
           const indexedReport = `https://search.google.com/search-console/index/drilldown?resource_id=${resource}&pages=SITEMAP&sitemap=${encodeURIComponent(
-            sitemap
+            sitemap,
           )}`;
           await page.goto(indexedReport);
 
@@ -438,7 +446,7 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
               });
               return Promise.resolve(urls);
             },
-            [reportSelector, reportStatus, reportTitle, sitemap]
+            [reportSelector, reportStatus, reportTitle, sitemap],
           );
 
           // Push sitemap coverage results to holding array
@@ -464,7 +472,7 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
                 });
                 return Promise.resolve(urls);
               },
-              [reportSelector, reportTitle, sitemap]
+              [reportSelector, reportTitle, sitemap],
             );
 
             // Push sitemap coverage results to holding array
@@ -507,12 +515,11 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
       tabs[last].orderNo = 0;
     }
     // Close Browser
-    await browser.close();
+    await context.close();
 
     // Export Excel File
     await workbook.xlsx.writeFile(`index-results_${currentDate()}.xlsx`);
     console.log(chalk.bgGreenBright('All data extracted - Find your results in the index-resuls.xlsx file'));
-
   } else {
     console.log(chalk.red('No properties were selected.'));
     process.exit();
