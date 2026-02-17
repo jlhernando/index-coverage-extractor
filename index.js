@@ -215,9 +215,9 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
         return Array.from(clean);
       });
 
-      // Select properties you want to extract data from
-      const selectedProps = await clack.multiselect({
-        message: 'Select properties (min. 1)',
+      // Select properties you want to extract data from (type to filter)
+      const selectedProps = await clack.autocompleteMultiselect({
+        message: 'Select properties (type to filter)',
         options: gscProps.map((p) => ({ value: p, label: p })),
         required: true,
       });
