@@ -253,20 +253,16 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
         sp.start('Extracting report IDs...');
         await page.goto(`https://search.google.com/search-console/index?resource_id=${resource}`);
 
-        // Extract available reports for property
+        // Extract available reports for property — scan ALL script blocks for report IDs
         const reportIDs = await page.evaluate(
           ([prop]) => {
             var rawArray = Array.from(document.querySelectorAll('script[nonce]'), (el) => el.text);
-            var ruleNotIndexed = 'ds:11';
-            var ruleWarning = 'ds:13';
-            var notIndexed = rawArray.filter((s) => s.includes(ruleNotIndexed))[1];
-            var warning = rawArray.filter((s) => s.includes(ruleWarning))[1];
-            var script = notIndexed.concat(warning);
             var regex = new RegExp(`"${prop}",13,"([^"]+)"`, 'g');
-            var matches = [...script.matchAll(regex)];
             var ids = new Set();
-            for (const match of matches) ids.add(match[1]);
-            const reports = [{ category: 'Indexed', key: 'pages', param: 'ALL_URLS' }];
+            for (var script of rawArray) {
+              for (var match of script.matchAll(regex)) ids.add(match[1]);
+            }
+            var reports = [{ category: 'Indexed', key: 'pages', param: 'ALL_URLS' }];
             ids.forEach((id) => reports.push({ category: 'Not indexed/Warning', key: 'item_key', param: id }));
             return reports;
           },
