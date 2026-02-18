@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node index",
     "test": "node --test",
-    "reset": "rm -rf chrome-profile && echo 'Session cleared. Run npm start to log in again.'"
+    "reset": "node -e \"import('fs/promises').then(f=>f.rm('chrome-profile',{recursive:true,force:true})).then(()=>console.log('Session cleared. Run npm start to log in again.'));\""
   },
   "keywords": [
     "index coverage report",
