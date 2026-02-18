@@ -33,7 +33,7 @@ Author: Jose Luis Hernando | License: MIT | Runtime: Node.js (ESM, v20+)
 3. **Discover properties** — If `site` is not set in `credentials.js`, scrapes the GSC welcome page for available properties and presents a multi-select prompt.
 4. **Extract Index Coverage** — For each property:
    - Navigates to the Index Coverage page.
-   - Extracts available report IDs from embedded `<script>` tags (pattern: `ds:11`, `ds:13`).
+   - Extracts available report IDs by scanning all embedded `<script>` tags (future-proof — not tied to specific `ds:N` block numbers).
    - Loops through each report, scraping URLs via CSS selector `.OOHai`.
    - Builds summary stats (extracted count vs. GSC total, extraction ratio).
 5. **Extract Sitemap Coverage** (optional, `sitemapExtract = true`):

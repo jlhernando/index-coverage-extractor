@@ -151,6 +151,7 @@ const americanDateChange = true; // Convert American dates to European format in
 - **Replaced enquirer + readline with @clack/prompts**: Modern terminal UI with searchable multi-select, masked password input, spinners, and progress indicators.
 - **Sign-in rejection handling**: Detects when Google blocks the automated browser and provides clear troubleshooting steps.
 - **Spinners and progress counters**: All long-running operations show spinners with `[1/N]` progress. 2FA shows a countdown timer.
+- **Fixed report ID extraction**: Scans all script blocks for report IDs instead of hardcoded `ds:11`/`ds:13`, which Google had moved. Previously missed all not-indexed report categories. Inspired by PR #4 from @hanicker.
 - **Fixed Playwright deprecations**: Replaced `type()` with `pressSequentially()`, `waitForSelector()` with `locator.waitFor()`, `waitForTimeout()` with native `setTimeout`.
 - **Added unit tests** (29 tests) for utility functions using Node.js built-in test runner.
 - **Error handling**: `try/finally` wrapper ensures browser cleanup on unexpected errors.
