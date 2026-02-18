@@ -2,9 +2,19 @@
 
 This script allows users of Google Search Console (GSC) to extract all the different reports from the [Index Coverage report section](https://support.google.com/webmasters/answer/7440203?hl=en) of the platform and the [Sitemap Coverage report section](https://support.google.com/webmasters/answer/7451001?hl=en&ref_topic=9456557). I wrote a blog post about [why I built this script](https://jlhernando.com/blog/index-coverage-extractor/).
 
+## How it works
+
+The script automates a Chrome browser to log into Google Search Console and extract index coverage data. Here's the flow:
+
+1. **Login** — Launches a persistent Chrome session. If you're already logged in (session saved), it skips the login step. Otherwise, it prompts for your Google email and password with support for 2-Step Verification.
+2. **Property selection** — Extracts all GSC properties from your account and presents a searchable multi-select picker (type to filter, spacebar to select).
+3. **Report extraction** — For each selected property, navigates to the Index Coverage page, discovers available report IDs from the page source, and extracts URLs from each report (up to GSC's 1,000-row export limit per report).
+4. **Sitemap extraction** _(optional)_ — Discovers all sitemaps for the property, then extracts coverage data and individual URLs from each sitemap's reports.
+5. **Output** — Generates an Excel file with summary and detail tabs per property, plus individual CSV files organized in folders per property.
+
 ## Installing and running the script
 
-The script uses the ECMAScript modules import/export syntax so double check that you are above version 20 to run the script.
+The script uses ECMAScript modules (ESM) import/export syntax. Node.js v20+ is required.
 
 ```bash
 # Check Node version
@@ -17,21 +27,11 @@ After downloading/cloning the repo, install the necessary modules to run the scr
 npm install
 ```
 
-After that you can run the script with _npm start_ command from your terminal.
+After that you can run the script with the _npm start_ command from your terminal.
 
 ```bash
 npm start
 ```
-
-You will get a prompt message in your terminal asking for your Google Account email address and your password (masked input). This is to login automatically through the browser.
-
-If you have 2-step Verification enabled it will prompt a warning message and wait for 30 seconds to give the user time to verify access through one of your devices.
-
-Once verified and logged in, the script will extract all the list of GSC properties present in your account. At this point you will have to choose which properties you would like to extract data from.
-
-Select one or multiple properties using the spacebar. Move up and down using the arrow keys.
-
-When this is done, your will see the processing messages in your terminal while the script runs.
 
 ### Available commands
 
@@ -43,30 +43,51 @@ When this is done, your will see the processing messages in your terminal while 
 
 ## Output
 
-The script will create a "index-results\_{date}.xlsx" Excel file. The file will contain 1 summary tab with the number of Indexed URLs per property when you choose more than 1 property and up to 4 tabs per property including:
+The script creates an `index-results_{date}.xlsx` Excel file. The file will contain 1 summary tab with the number of Indexed URLs per property when you choose more than 1 property and up to 4 tabs per property:
 
-- A summary of the index coverage extraction of the property.
-- The individual URLs extracted from the Coverage section.
-- A summary of the index coverage extraction from the Sitemap section.
-- The individual URLs extracted from the Sitemap section.
+- **sitename\_SUM** — Summary of the index coverage extraction: URLs extracted vs total reported by GSC, with extraction ratio.
+- **sitename\_COV** — Individual URLs extracted from each coverage report. Domain properties are preceded by `DOM`.
+- **sitename\_SUM\_MAPS** — Top-level coverage numbers (indexed / not indexed) per sitemap.
+- **sitename\_MAPS** — Individual URLs extracted from sitemap coverage reports.
 
-The "sitename\_COV" tab and the "coverage.csv" file will contain all the URLs that have been extracted from each individual coverage report. If you have requested a domain property the tab in Excel and the CSV will be preceded by DOM.
+CSV files with the same data are also created in a folder named after each property:
 
-The "sitename\_SUM" tab and the "summary.csv" file will contain the amount of urls per report that have been extracted, the total number that GSC reports in the user interface (either the same or higher) and an "extraction ratio" which is a division between the URLs extracted and the total number of URLs reported by GSC.
+- `coverage_{site}_{date}.csv`
+- `summary_{site}_{date}.csv`
+- `sitemaps-{site}_{date}.csv`
+- `sum-sitemaps-{site}_{date}.csv`
 
-This is useful because GSC has an export limit of 1000 rows per report. Hence, the "extraction ratio" may be small compared to the total amount of total URLs within a specific report.
+> **Note:** GSC has an export limit of 1,000 rows per report. The summary's "extraction ratio" shows how much of the total was captured — it may be small for reports with many URLs.
 
-The "sitename\_MAPS" tab and the "sitemap.csv" file will contain all the URLs that have been extracted from each individual sitemap coverage report.
+## Project structure
 
-The "sitename\_SUM\_MAPS" tab and the "sum-sitemap.csv" file will contain a summary of the top-level coverage numbers per sitemap reported by GSC.
+```
+├── index.js            # Main script — browser automation, extraction logic, Excel/CSV output
+├── credentials.js      # Optional pre-filled Google credentials and site list
+├── report-names.js     # Maps GSC internal report IDs to human-readable names
+├── utils.js            # Utility functions: date formatting, CSV conversion, site name helpers
+├── test/
+│   └── utils.test.js   # 29 unit tests for utils.js (Node.js built-in test runner)
+├── chrome-profile/     # Persistent Chrome session data (gitignored, created on first run)
+└── package.json
+```
 
-## Additional optional settings
+## Dependencies
 
-### _credentials.js File_
+| Package | Purpose |
+|---------|---------|
+| [playwright](https://playwright.dev) | Browser automation — launches Chrome, navigates GSC, extracts data |
+| [@clack/prompts](https://github.com/bombshell-dev/clack) | Terminal UI — text/password inputs, searchable multi-select, spinners, progress |
+| [ansis](https://github.com/nicedoc/ansis) | Terminal colors — lightweight chalk replacement (15KB vs 101KB) |
+| [exceljs](https://github.com/exceljs/exceljs) | Excel file generation with multiple tabs and table formatting |
+
+## Configuration
+
+### credentials.js
 
 #### Email & Password
 
-You can choose to fill in the `credentials.js` file with your email and password to avoid adding them in the terminal during the running of the script.
+You can fill in the `credentials.js` file with your email and password to avoid entering them in the terminal each time.
 
 #### Sites
 
@@ -84,37 +105,40 @@ const site = ['https://yoursite.com/', 'sc-domain:yourdomain.com'];
 
 ### Session persistence
 
-The script uses a persistent Chrome profile stored in `chrome-profile/` directory. After your first login, the session is saved automatically — you won't need to log in again on subsequent runs.
+The script uses a persistent Chrome profile stored in `chrome-profile/`. After your first login, the session is saved automatically — you won't need to log in again on subsequent runs.
 
-If you use multiple Google accounts or need to re-login, run:
+If you need to switch Google accounts or re-login:
 
 ```bash
 npm run reset
 ```
 
-### Headless
+### Headless mode
 
-In some cases you might want to see how the browser automation is happening in real-time. For that, you can change the `headless` variable.
+By default the browser runs in headless mode (hidden). To watch the automation in real-time, change the `headless` variable in `index.js`:
 
 ```js
-// Change to false to see the automation
 const headless = false;
 ```
 
-### sitemapExtract
+### Sitemap extraction
 
-Since each GSC property can contain many sitemaps and this can take more time, you can choose whether you would like to extract sitemap coverage data or not.
+Since each GSC property can contain many sitemaps and this can take more time, you can disable sitemap extraction:
 
 ```js
-// Change to false to prevent the script from extracting sitemap coverage data
 const sitemapExtract = false;
 ```
 
-### Dates
+### Date format
 
-The script extracts the "Latest updated" dates that GSC provides. Hence the date can be in two different formats: American date (mm/dd/yyyy) and European date (dd/mm/yyyy). Therefore there is an option to set which date format you would like the script to output the dates.
+GSC shows dates in two formats depending on your locale: American (mm/dd/yyyy) or European (dd/mm/yyyy).
 
-The default setting assumes your property shows the dates in European date format (dd/mm/yyyy). If your GSC property shows the dates in American date format then you would need to change `americanDate = true`. Also if your property is in American date format but you'd like to change it to European date format you can do that by changing `americanDateChange = true`.
+The default assumes European date format. If your GSC property shows American dates, change in `index.js`:
+
+```js
+const americanDate = true;       // Your GSC shows American dates
+const americanDateChange = true; // Convert American dates to European format in output
+```
 
 ## Changelog
 
@@ -122,12 +146,14 @@ The default setting assumes your property shows the dates in European date forma
 
 - **Reduced dependencies from 8 to 4**: Removed `moment`, `json2csv`, `fs`, and `path` npm packages. Date formatting and CSV conversion now use lightweight native utilities (`utils.js`).
 - **Updated Playwright** from v1.30.0-alpha to v1.50+ and switched from Firefox to system Chrome for better Google login compatibility.
-- **Replaced chalk with ansis**: Same API with hex color support, 7x smaller (15KB vs 101KB).
-- **Replaced enquirer + readline with @clack/prompts**: Modern terminal UI with masked password input, input validation, and multiselect with box-drawing UI.
 - **Persistent Chrome profile**: Replaced `cookies.json` with a persistent browser profile (`chrome-profile/`) for reliable session persistence.
+- **Replaced chalk with ansis**: Same API with hex color support, 7x smaller (15KB vs 101KB).
+- **Replaced enquirer + readline with @clack/prompts**: Modern terminal UI with searchable multi-select, masked password input, spinners, and progress indicators.
 - **Sign-in rejection handling**: Detects when Google blocks the automated browser and provides clear troubleshooting steps.
+- **Spinners and progress counters**: All long-running operations show spinners with `[1/N]` progress. 2FA shows a countdown timer.
 - **Fixed Playwright deprecations**: Replaced `type()` with `pressSequentially()`, `waitForSelector()` with `locator.waitFor()`, `waitForTimeout()` with native `setTimeout`.
 - **Added unit tests** (29 tests) for utility functions using Node.js built-in test runner.
+- **Error handling**: `try/finally` wrapper ensures browser cleanup on unexpected errors.
 
 ### v2.1.0
 
