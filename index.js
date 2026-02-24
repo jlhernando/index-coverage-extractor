@@ -10,24 +10,89 @@ import * as clack from '@clack/prompts'; // Modern terminal prompts (text, passw
 import ansis from 'ansis'; // Terminal colors (lightweight chalk replacement)
 
 /* Settings */
-const headless = true; // Whether you want to see the browser automation (false) or run hidden (true) - Default true
+const headless = false; // Whether you want to see the browser automation (false) or run hidden (true) - Default true
 const sitemapExtract = true; // Whether you want to extract data from sitemaps or not - Default true
 const sites = []; // Holding array for GSC properties
 const indexedSum = []; // Holding array for summary of indexed URLs from all GSC properties
-const americanDate = false; // Variable to identify that the GSC property has American Date (mm/dd/yy). If your GSC property does not have American Date this variable should be set as false
-const americanDateChange = false; // Converts American Date (mm/dd/yy) in GSC to European Date (dd/mm/yy)
 const reportSelector = '.OOHai'; // CSS Selector from report Urls
 const reportTitle = '.Iq9klb'; // CSS Selector to extract report name from sitemap coverage reports
 const reportStatus = '.DDFhO'; // CSS Selector to extract report status from sitemap coverage reports
 const profilePath = './chrome-profile'; // Persistent Chrome profile directory — stores cookies, sessions, etc.
 const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; // GSC Homepage URL
+let gscPathPrefix = ''; // Multi-account prefix (e.g., '/u/0') detected from current GSC URL
+const MAX_CONSECUTIVE_EMPTY = 3; // Stop sitemap extraction after N consecutive empty sitemaps
+
+/**
+ * Build a GSC URL with multi-account prefix support.
+ */
+function buildGscUrl(resource, page, extraParams = {}) {
+  const base = `https://search.google.com${gscPathPrefix}/search-console/${page}`;
+  const params = new URLSearchParams({ resource_id: resource, ...extraParams });
+  return `${base}?${params.toString()}`;
+}
+
+/**
+ * Detect /u/N/ prefix from the current page URL for multi-account support.
+ */
+function detectGscPrefix(url) {
+  const match = url?.match(/search\.google\.com(\/u\/\d+)\/search-console/);
+  gscPathPrefix = match?.[1] || '';
+}
+
+/**
+ * Check if the page is a Google error page (500, 429, etc.) via DOM inspection.
+ */
+async function checkForGoogleError(page) {
+  const error = await page.evaluate(() => {
+    const bodyText = document.body?.innerText || '';
+    const title = document.title || '';
+    const errorMatch = bodyText.match(/(\d{3})\.\s*That'?s an error/i);
+    if (errorMatch) return { error: true, code: errorMatch[1], message: `Google ${errorMatch[1]} error` };
+    if (/Error\s+\d{3}/.test(title)) {
+      const code = title.match(/\d{3}/)?.[0] || 'unknown';
+      return { error: true, code, message: `Google error (${code})` };
+    }
+    if (bodyText.includes('Too Many Requests') || /rate.?limit/i.test(bodyText)) {
+      return { error: true, code: '429', message: 'Google rate limit (429)' };
+    }
+    return { error: false };
+  });
+  if (error.error) throw new Error(error.message);
+}
+
+/**
+ * Navigate to a URL and check for Google error pages.
+ */
+async function navigateAndCheck(page, url) {
+  await page.goto(url);
+  await checkForGoogleError(page);
+}
+
+/**
+ * Parse a GSC date string (locale-dependent) into a Date object.
+ * Disambiguates US (M/D/YY) vs EU (D/M/YY) by checking if any part > 12.
+ */
+function parseGscDateStr(dateStr) {
+  if (!dateStr || dateStr === 'No date') return null;
+  const clean = dateStr.replace(/[^\d/\-\.]/g, '').trim();
+  const parts = clean.split(/[/\-\.]/);
+  if (parts.length !== 3) return null;
+  let [a, b, c] = parts.map(Number);
+  if (c < 100) c += 2000;
+  let d;
+  if (a > 12) d = new Date(c, b - 1, a);
+  else if (b > 12) d = new Date(c, a - 1, b);
+  else d = new Date(c, a - 1, b); // Ambiguous → assume US (MM/DD)
+  return isNaN(d.getTime()) ? null : d;
+}
 
 // Asynchronous IIFE
 (async () => {
-  clack.intro(ansis.bgCyanBright(' GSC Index Coverage Extractor v3.0.0 '));
+  clack.intro(ansis.bgCyanBright(' GSC Index Coverage Extractor v3.1.0 '));
 
   let context;
   let totalUrls = 0;
+  let workbook;
 
   try {
     // Setup browser with persistent profile (avoids Google detecting automation)
@@ -40,7 +105,7 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
       args: ['--disable-blink-features=AutomationControlled'],
     });
 
-    let page = context.pages()[0] || await context.newPage();
+    let page = context.pages()[0] || (await context.newPage());
     s.stop('Browser launched.');
 
     // Helper: check if Google blocked the sign-in as "unsafe browser"
@@ -75,8 +140,15 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
 
       try {
         if (!email) {
-          gmail = await clack.text({ message: 'Input your Google Account email:', validate: (v) => v.length === 0 ? 'Email is required' : undefined });
-          if (clack.isCancel(gmail)) { clack.cancel('Cancelled.'); await context.close(); process.exit(); }
+          gmail = await clack.text({
+            message: 'Input your Google Account email:',
+            validate: (v) => (v.length === 0 ? 'Email is required' : undefined),
+          });
+          if (clack.isCancel(gmail)) {
+            clack.cancel('Cancelled.');
+            await context.close();
+            process.exit();
+          }
         } else gmail = email;
 
         s.start('Submitting email...');
@@ -87,16 +159,16 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
           resp.url().includes('https://accounts.google.com/v3/signin/_/AccountsSignInUi/'),
         );
         checkSignInRejected();
-        if (await page.getByText("Couldn\u2019t find your Google Account").isVisible()) {
+        if (await page.getByText('Couldn\u2019t find your Google Account').isVisible()) {
           s.stop('Email rejected.');
-          clack.log.error("Google couldn\u2019t find your Google Account. Check the email and try again.");
+          clack.log.error('Google couldn\u2019t find your Google Account. Check the email and try again.');
           await context.close();
           process.exit();
         }
         s.stop('Email accepted.');
       } catch (error) {
         checkSignInRejected();
-        clack.log.error(`There was an issue with your email address: ${error.message}`);
+        clack.log.error('There was an issue submitting your email address. Please check it and try again.');
         await context.close();
         process.exit();
       }
@@ -106,8 +178,15 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
 
       try {
         if (!pass) {
-          password = await clack.password({ message: 'Input your Google Account password:', validate: (v) => v.length === 0 ? 'Password is required' : undefined });
-          if (clack.isCancel(password)) { clack.cancel('Cancelled.'); await context.close(); process.exit(); }
+          password = await clack.password({
+            message: 'Input your Google Account password:',
+            validate: (v) => (v.length === 0 ? 'Password is required' : undefined),
+          });
+          if (clack.isCancel(password)) {
+            clack.cancel('Cancelled.');
+            await context.close();
+            process.exit();
+          }
         } else password = pass;
 
         s.start('Submitting password...');
@@ -148,7 +227,9 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
                 }
                 await new Promise((r) => setTimeout(r, interval));
                 elapsed += interval;
-                s.message(`Waiting for 2FA verification (${Math.ceil((checkDuration - elapsed) / 1000)}s remaining)...`);
+                s.message(
+                  `Waiting for 2FA verification (${Math.ceil((checkDuration - elapsed) / 1000)}s remaining)...`,
+                );
               }
 
               if (elapsed >= checkDuration) {
@@ -167,7 +248,7 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
         }
       } catch (error) {
         checkSignInRejected();
-        clack.log.error(`There was an issue with your password: ${error.message}`);
+        clack.log.error('There was an issue submitting your password. Please check it and try again.');
         await context.close();
         process.exit();
       }
@@ -179,8 +260,27 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
     clack.log.success('GSC access successful!');
     loggedIn = true;
 
+    // Detect multi-account /u/N/ prefix from the current URL
+    detectGscPrefix(page.url());
+    if (gscPathPrefix) clack.log.info(`Multi-account prefix detected: ${gscPathPrefix}`);
+
+    // Ask user for preferred date format
+    const dateFormat = await clack.select({
+      message: 'Select date format for exports:',
+      options: [
+        { value: 'DD/MM/YYYY', label: 'DD/MM/YYYY' },
+        { value: 'MM/DD/YYYY', label: 'MM/DD/YYYY' },
+        { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD (ISO)' },
+      ],
+    });
+    if (clack.isCancel(dateFormat)) {
+      clack.cancel('Cancelled.');
+      await context.close();
+      process.exit();
+    }
+
     // Create Excel doc
-    const workbook = new Excel.Workbook();
+    workbook = new Excel.Workbook();
 
     const createExcelTab = async (arr, wb, tabName) => {
       if (!arr || arr.length === 0) return;
@@ -237,219 +337,252 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
         const site = sites[i];
         clack.log.info(`${ansis.bold(`[${i + 1}/${sites.length}]`)} Extracting: ${ansis.cyan(site)}`);
 
-        /* Data */
-        const resource = encodeURIComponent(site);
-        const { file, short } = friendlySiteName(site);
-        const results = [];
-        const summary = [];
-        const sitemapRes = [];
-        const summarySitemaps = [];
+        try {
+          /* Data */
+          const resource = encodeURIComponent(site);
+          const { file, short } = friendlySiteName(site);
+          const results = [];
+          const summary = [];
+          const sitemapRes = [];
+          const summarySitemaps = [];
 
-        // Create folder to store CSV output
-        if (!existsSync(file)) await mkdir(file);
+          // Create folder to store CSV output
+          if (!existsSync(file)) await mkdir(file);
 
-        // Access Index Coverage page from site
-        const sp = clack.spinner();
-        sp.start('Extracting report IDs...');
-        await page.goto(`https://search.google.com/search-console/index?resource_id=${resource}`);
+          // Access Index Coverage page from site
+          const sp = clack.spinner();
+          sp.start('Extracting report IDs...');
+          await navigateAndCheck(page, buildGscUrl(resource, 'index'));
 
-        // Extract available reports for property — scan ALL script blocks for report IDs
-        const reportIDs = await page.evaluate(
-          ([prop]) => {
-            var rawArray = Array.from(document.querySelectorAll('script[nonce]'), (el) => el.text);
-            var regex = new RegExp(`"${prop}",13,"([^"]+)"`, 'g');
-            var ids = new Set();
-            for (var script of rawArray) {
-              for (var match of script.matchAll(regex)) ids.add(match[1]);
-            }
-            var reports = [{ category: 'Indexed', key: 'pages', param: 'ALL_URLS' }];
-            ids.forEach((id) => reports.push({ category: 'Not indexed/Warning', key: 'item_key', param: id }));
-            return reports;
-          },
-          [site],
-        );
-        sp.stop(`Found ${reportIDs.length} reports.`);
-
-        // Loop through report categories
-        for (let j = 0; j < reportIDs.length; j++) {
-          const { category, key, param } = reportIDs[j];
-          const report = `https://search.google.com/search-console/index/drilldown?resource_id=${resource}&${key}=${param}`;
-
-          const rp = clack.spinner();
-          const reportName = reportsNames[param] || param;
-          rp.start(`[${j + 1}/${reportIDs.length}] Checking ${reportName}...`);
-          await page.goto(report);
-
-          const reportUrls = await page.evaluate(
-            ([sel, cat]) => {
-              const updated = document.querySelector('.zTJZxd.zOPr2c')?.innerText ?? 'No date';
-              const arr = Array.from(document.querySelectorAll(sel)).map((url) => ({
-                status: cat,
-                'report name': document.querySelector('.Iq9klb')?.innerText ?? 'No name',
-                url: url.innerText.replace(//g, ''),
-                updated: updated.replace(/[^\d|\/]+/g, ''),
-              }));
-              return Promise.resolve(arr);
+          // Extract available reports for property — scan ALL script blocks for report IDs
+          const reportIDs = await page.evaluate(
+            ([prop]) => {
+              var rawArray = Array.from(document.querySelectorAll('script[nonce]'), (el) => el.text);
+              var regex = new RegExp(`"${prop}",13,"([^"]+)"`, 'g');
+              var ids = new Set();
+              for (var script of rawArray) {
+                for (var match of script.matchAll(regex)) ids.add(match[1]);
+              }
+              var reports = [{ category: 'Indexed', key: 'pages', param: 'ALL_URLS' }];
+              ids.forEach((id) => reports.push({ category: 'Not indexed/Warning', key: 'item_key', param: id }));
+              return reports;
             },
-            [reportSelector, category],
+            [site],
           );
+          sp.stop(`Found ${reportIDs.length} reports.`);
 
-          results.push(...reportUrls);
-          rp.stop(`[${j + 1}/${reportIDs.length}] ${reportName} — ${reportUrls.length} URLs`);
+          // Loop through report categories
+          for (let j = 0; j < reportIDs.length; j++) {
+            const { category, key, param } = reportIDs[j];
+            const report = buildGscUrl(resource, 'index/drilldown', { [key]: param });
 
-          if (reportUrls.length !== 0) {
-            const total = await page.evaluate(() => {
-              const num = Array.from(document.querySelectorAll('.CO3mte'));
-              return Promise.resolve(parseInt(num[num.length - 1].attributes.title.textContent.replace(',', '')));
-            });
+            const rp = clack.spinner();
+            const reportName = reportsNames[param] || param;
+            rp.start(`[${j + 1}/${reportIDs.length}] Checking ${reportName}...`);
+            await navigateAndCheck(page, report);
 
-            summary.push({
-              status: category,
-              'report name': reportUrls[0]['report name'],
-              '# URLs extracted': reportUrls.length,
-              'total reported': total,
-              'extraction ratio': reportUrls.length / total,
-            });
+            const reportUrls = await page.evaluate(
+              ([sel, cat]) => {
+                const updated = document.querySelector('.zTJZxd.zOPr2c')?.innerText ?? 'No date';
+                const arr = Array.from(document.querySelectorAll(sel)).map((url) => ({
+                  status: cat,
+                  'report name': document.querySelector('.Iq9klb')?.innerText ?? 'No name',
+                  url: url.innerText.replace(/[\uE14D\uE89E\uE8B6]/g, ''),
+                  updated: updated.replace(/[^\d|\/]+/g, ''),
+                }));
+                return Promise.resolve(arr);
+              },
+              [reportSelector, category],
+            );
 
-            if (param === 'ALL_URLS' && sites.length > 1) {
-              indexedSum.push({
-                'GSC Property': site,
+            results.push(...reportUrls);
+            rp.stop(`[${j + 1}/${reportIDs.length}] ${reportName} — ${reportUrls.length} URLs`);
+
+            if (reportUrls.length !== 0) {
+              const total = await page.evaluate(() => {
+                const el = Array.from(document.querySelectorAll('.CO3mte')).pop();
+                if (!el) return 0;
+                const title = el.getAttribute('title') || (el.closest('.CO3mte[title]') || {getAttribute:()=>null}).getAttribute('title');
+                if (title) { const n = parseInt(title.replace(/,/g, '')); if (!isNaN(n)) return n; }
+                const text = (el.innerText || '').trim();
+                const m = text.match(/^([\d,.]+)\s*([KMBkmb])?$/);
+                if (m) { const n = parseFloat(m[1].replace(/,/g, '')); const s = (m[2]||'').toUpperCase(); if (s==='K') return Math.round(n*1000); if (s==='M') return Math.round(n*1000000); if (s==='B') return Math.round(n*1000000000); return Math.round(n); }
+                return parseInt(text.replace(/[,.\s]/g, '')) || 0;
+              });
+
+              summary.push({
                 status: category,
                 'report name': reportUrls[0]['report name'],
                 '# URLs extracted': reportUrls.length,
                 'total reported': total,
                 'extraction ratio': reportUrls.length / total,
               });
+
+              if (param === 'ALL_URLS' && sites.length > 1) {
+                indexedSum.push({
+                  'GSC Property': site,
+                  status: category,
+                  'report name': reportUrls[0]['report name'],
+                  '# URLs extracted': reportUrls.length,
+                  'total reported': total,
+                  'extraction ratio': reportUrls.length / total,
+                });
+              }
             }
           }
-        }
 
-        // Change date format
-        const finalResults = results.map(({ updated, ...rest }) => {
-          if (americanDate) {
-            return { ...rest, 'last updated': formatDate(updated, 'MM-DD-YYYY', americanDateChange ? 'DD-MM-YYYY' : 'MM-DD-YYYY') };
-          } else {
-            return { ...rest, 'last updated': formatDate(updated, 'DD-MM-YYYY', 'DD-MM-YYYY') };
-          }
-        });
-
-        // Write CSV files
-        if (finalResults.length) {
-          writeFile(`./${file}/coverage_${file}_${currentDate()}.csv`, jsonToCsv(finalResults));
-          writeFile(`./${file}/summary_${file}_${currentDate()}.csv`, jsonToCsv(summary));
-          clack.log.success(`Coverage CSV files created for ${ansis.cyan(site)}`);
-        }
-        totalUrls += finalResults.length;
-
-        // Add data to Excel doc as tabs
-        createExcelTab(summary, workbook, `${short}_SUM`);
-        createExcelTab(finalResults, workbook, `${short}_COV`);
-
-        if (sitemapExtract) {
-          const ssp = clack.spinner();
-          ssp.start('Extracting sitemap coverage...');
-          const sitemapEndPoint = `https://search.google.com/search-console/sitemaps?resource_id=${resource}`;
-          await page.goto(sitemapEndPoint);
-
-          const sitemaps = await page.evaluate(() => {
-            const list = Array.from(document.querySelectorAll('.nJ0sOc.Ev7kWb.ptEsvc.s4dpBd'));
-            return Promise.resolve(list.map((row) => row.dataset.rowid));
+          // Reformat dates using auto-detection + user-chosen output format
+          const finalResults = results.map(({ updated, ...rest }) => {
+            const parsed = parseGscDateStr(updated);
+            const formatted = parsed ? formatDate(parsed, dateFormat) : updated;
+            return { ...rest, 'last updated': formatted };
           });
-          ssp.stop(`Found ${sitemaps.length} sitemaps.`);
 
-          for (let k = 0; k < sitemaps.length; k++) {
-            const sitemap = sitemaps[k];
-            const smp = clack.spinner();
-            smp.start(`[${k + 1}/${sitemaps.length}] Sitemap: ${sitemap}`);
+          // Write CSV files
+          if (finalResults.length) {
+            await writeFile(`./${file}/coverage_${file}_${currentDate()}.csv`, jsonToCsv(finalResults));
+            await writeFile(`./${file}/summary_${file}_${currentDate()}.csv`, jsonToCsv(summary));
+            clack.log.success(`Coverage CSV files created for ${ansis.cyan(site)}`);
+          }
+          totalUrls += finalResults.length;
 
-            const sitemapReport = `https://search.google.com/search-console/index?resource_id=${resource}&pages=SITEMAP&sitemap=${encodeURIComponent(sitemap)}`;
-            const reportPage = await page.goto(sitemapReport);
-            if (!reportPage) throw new Error(`Navigation returned null for ${sitemapReport}`);
-            const source = await reportPage.text();
-            const reportKeys = [...source.matchAll(/CAES\w+/g)];
-            const sitemapCoverageReports = new Set();
-            for (const val of reportKeys) sitemapCoverageReports.add(val[0]);
+          // Add data to Excel doc as tabs
+          createExcelTab(summary, workbook, `${short}_SUM`);
+          createExcelTab(finalResults, workbook, `${short}_COV`);
 
-            const sitemapNums = await page.evaluate(
-              (origin) => {
-                const topNums = Array.from(document.querySelectorAll('.nnLLaf'));
-                if (topNums.length > 0) {
-                  const extractNums = topNums.map((num) => num.attributes.title.textContent);
-                  return Promise.resolve({
-                    sitemap: origin[0],
-                    'Not indexed': parseInt(extractNums[0].replace(',', '')),
-                    indexed: parseInt(extractNums[1].replace(',', '')),
-                  });
-                } else {
-                  return Promise.resolve({
-                    sitemap: origin[0],
-                    'Not indexed': 'Sitemap fetching error',
-                    indexed: 'Sitemap fetching error',
-                  });
+          if (sitemapExtract) {
+            const ssp = clack.spinner();
+            ssp.start('Extracting sitemap coverage...');
+            await navigateAndCheck(page, buildGscUrl(resource, 'sitemaps'));
+
+            const sitemaps = await page.evaluate(() => {
+              const list = Array.from(document.querySelectorAll('.nJ0sOc.Ev7kWb.ptEsvc.s4dpBd'));
+              return Promise.resolve(list.map((row) => row.dataset.rowid));
+            });
+            ssp.stop(`Found ${sitemaps.length} sitemaps.`);
+
+            let consecutiveEmpty = 0;
+            for (let k = 0; k < sitemaps.length; k++) {
+              if (consecutiveEmpty >= MAX_CONSECUTIVE_EMPTY) {
+                const remaining = sitemaps.length - k;
+                clack.log.warning(`Skipping ${remaining} remaining sitemaps (${MAX_CONSECUTIVE_EMPTY} consecutive had no data)`);
+                break;
+              }
+
+              const sitemap = sitemaps[k];
+              const smp = clack.spinner();
+              smp.start(`[${k + 1}/${sitemaps.length}] Sitemap: ${sitemap}`);
+
+              try {
+                const sitemapReport = buildGscUrl(resource, 'index', { pages: 'SITEMAP', sitemap });
+                const reportPage = await page.goto(sitemapReport);
+                await checkForGoogleError(page);
+                if (!reportPage) throw new Error(`Navigation returned null for sitemap ${sitemap}`);
+                const source = await reportPage.text();
+                const reportKeys = [...source.matchAll(/CAES\w+/g)];
+                const sitemapCoverageReports = new Set();
+                for (const val of reportKeys) sitemapCoverageReports.add(val[0]);
+
+                const sitemapNums = await page.evaluate(
+                  (origin) => {
+                    const topNums = Array.from(document.querySelectorAll('.nnLLaf'));
+                    if (topNums.length > 0) {
+                      const extractNums = topNums.map((el) => {
+                        const title = el.getAttribute('title');
+                        if (title) { const n = parseInt(title.replace(/,/g, '')); if (!isNaN(n)) return n; }
+                        const text = (el.innerText || '').trim();
+                        const m = text.match(/^([\d,.]+)\s*([KMBkmb])?$/);
+                        if (m) { const n = parseFloat(m[1].replace(/,/g, '')); const s = (m[2]||'').toUpperCase(); if (s==='K') return Math.round(n*1000); if (s==='M') return Math.round(n*1000000); if (s==='B') return Math.round(n*1000000000); return Math.round(n); }
+                        return parseInt(text.replace(/[,.\s]/g, '')) || 0;
+                      });
+                      return Promise.resolve({
+                        sitemap: origin[0],
+                        'Not indexed': extractNums[0],
+                        indexed: extractNums[1],
+                      });
+                    } else {
+                      return Promise.resolve({
+                        sitemap: origin[0],
+                        'Not indexed': 'Sitemap fetching error',
+                        indexed: 'Sitemap fetching error',
+                      });
+                    }
+                  },
+                  [sitemap],
+                );
+                summarySitemaps.push(sitemapNums);
+
+                const indexedReport = buildGscUrl(resource, 'index/drilldown', { pages: 'SITEMAP', sitemap });
+                await navigateAndCheck(page, indexedReport);
+
+                const validURLs = await page.evaluate(
+                  ([sel, cat, title, origin]) => {
+                    const reportName = document.querySelector(title)?.innerText ?? 'No title';
+                    const date = document.querySelector('.J54Vt')?.nextSibling?.textContent ?? 'No date';
+                    const urls = Array.from(document.querySelectorAll(sel)).map((row) => ({
+                      sitemap: origin,
+                      'report name': reportName,
+                      url: row.innerText.replace(/[\uE14D\uE89E\uE8B6]/g, ''),
+                      date,
+                    }));
+                    return Promise.resolve(urls);
+                  },
+                  [reportSelector, reportStatus, reportTitle, sitemap],
+                );
+                sitemapRes.push(...validURLs);
+
+                for (const key of sitemapCoverageReports) {
+                  const indReport = buildGscUrl(resource, 'index/drilldown', { item_key: key });
+                  await navigateAndCheck(page, indReport);
+                  const indReportUrls = await page.evaluate(
+                    ([sel, title, origin]) => {
+                      const reportName = document.querySelector(title)?.innerText ?? 'No title';
+                      const date = document.querySelector('.J54Vt')?.nextSibling?.textContent ?? 'No date';
+                      const urls = Array.from(document.querySelectorAll(sel)).map((row) => ({
+                        sitemap: origin,
+                        'report name': reportName,
+                        url: row.innerText.replace(/[\uE14D\uE89E\uE8B6]/g, ''),
+                        date,
+                      }));
+                      return Promise.resolve(urls);
+                    },
+                    [reportSelector, reportTitle, sitemap],
+                  );
+                  sitemapRes.push(...indReportUrls);
                 }
-              },
-              [sitemap],
-            );
-            summarySitemaps.push(sitemapNums);
 
-            const indexedReport = `https://search.google.com/search-console/index/drilldown?resource_id=${resource}&pages=SITEMAP&sitemap=${encodeURIComponent(sitemap)}`;
-            await page.goto(indexedReport);
-
-            const validURLs = await page.evaluate(
-              ([sel, cat, title, origin]) => {
-                const reportName = document.querySelector(title).innerText ?? 'No title';
-                const date = document.querySelector('.J54Vt').nextSibling ?? 'No date';
-                const urls = Array.from(document.querySelectorAll(sel)).map((row) => ({
-                  sitemap: origin,
-                  'report name': reportName,
-                  url: row.innerText.replace(//g, ''),
-                  date: date.textContent,
-                }));
-                return Promise.resolve(urls);
-              },
-              [reportSelector, reportStatus, reportTitle, sitemap],
-            );
-            sitemapRes.push(...validURLs);
-
-            for (const key of sitemapCoverageReports) {
-              const indReport = `https://search.google.com/search-console/index/drilldown?resource_id=${site}&item_key=${key}`;
-              await page.goto(indReport);
-              const indReportUrls = await page.evaluate(
-                ([sel, title, origin]) => {
-                  const reportName = document.querySelector(title).innerText ?? 'No title';
-                  const date = document.querySelector('.J54Vt').nextSibling ?? 'No date';
-                  const urls = Array.from(document.querySelectorAll(sel)).map((row) => ({
-                    sitemap: origin,
-                    'report name': reportName,
-                    url: row.innerText.replace(//g, ''),
-                    date: date.textContent,
-                  }));
-                  return Promise.resolve(urls);
-                },
-                [reportSelector, reportTitle, sitemap],
-              );
-              sitemapRes.push(...indReportUrls);
+                if (validURLs.length > 0) {
+                  consecutiveEmpty = 0;
+                } else {
+                  consecutiveEmpty++;
+                }
+                smp.stop(`[${k + 1}/${sitemaps.length}] Sitemap: ${sitemap} — ${validURLs.length} URLs`);
+              } catch (e) {
+                smp.stop(`[${k + 1}/${sitemaps.length}] Sitemap: ${sitemap} — Error: ${e.message}`);
+                clack.log.warning(`Skipped sitemap ${sitemap}: ${e.message}`);
+              }
+              await new Promise((r) => setTimeout(r, 4000));
             }
-            smp.stop(`[${k + 1}/${sitemaps.length}] Sitemap: ${sitemap} — ${validURLs.length} URLs`);
-            await new Promise((r) => setTimeout(r, 4000));
-          }
 
-          const finalSitemapRes = sitemapRes.map(({ date, ...rest }) => {
-            if (americanDate) {
-              return { ...rest, 'last updated': formatDate(date, 'MM-DD-YYYY', americanDateChange ? 'DD-MM-YYYY' : 'MM-DD-YYYY') };
-            } else {
-              return { ...rest, 'last updated': formatDate(date, 'DD-MM-YYYY', 'DD-MM-YYYY') };
+            // Reformat sitemap dates
+            const finalSitemapRes = sitemapRes.map(({ date, ...rest }) => {
+              const parsed = parseGscDateStr(date);
+              const formatted = parsed ? formatDate(parsed, dateFormat) : date;
+              return { ...rest, 'last updated': formatted };
+            });
+
+            if (finalSitemapRes.length) {
+              await writeFile(`./${file}/sitemaps-${file}_${currentDate()}.csv`, jsonToCsv(finalSitemapRes));
+              await writeFile(`./${file}/sum-sitemaps-${file}_${currentDate()}.csv`, jsonToCsv(summarySitemaps));
+              clack.log.success(`Sitemap CSV files created for ${ansis.cyan(site)}`);
+              createExcelTab(summarySitemaps, workbook, `${short}_SUM_MAPS`);
+              createExcelTab(finalSitemapRes, workbook, `${short}_MAPS`);
+              totalUrls += finalSitemapRes.length;
             }
-          });
-
-          if (finalSitemapRes.length) {
-            writeFile(`./${file}/sitemaps-${file}_${currentDate()}.csv`, jsonToCsv(finalSitemapRes));
-            writeFile(`./${file}/sum-sitemaps-${file}_${currentDate()}.csv`, jsonToCsv(summarySitemaps));
-            clack.log.success(`Sitemap CSV files created for ${ansis.cyan(site)}`);
-            createExcelTab(summarySitemaps, workbook, `${short}_SUM_MAPS`);
-            createExcelTab(finalSitemapRes, workbook, `${short}_MAPS`);
-            totalUrls += finalSitemapRes.length;
           }
+        } catch (propError) {
+          clack.log.error(`Error extracting ${site}: ${propError.message}`);
+          clack.log.warning('Continuing with next property...');
         }
       }
 
@@ -481,8 +614,20 @@ const gscHomepage = 'https://search.google.com/search-console/welcome?hl=en'; //
     }
   } catch (error) {
     clack.log.error(`Unexpected error: ${error.message}`);
+
+    // Save partial results if workbook has data
+    if (workbook && workbook.worksheets.length > 0) {
+      try {
+        const partialFile = `index-results_PARTIAL_${currentDate()}.xlsx`;
+        await workbook.xlsx.writeFile(partialFile);
+        clack.log.warning(`Partial results saved: ${partialFile}`);
+      } catch (_) {}
+    }
+
     if (context) {
-      try { await context.close(); } catch (_) {}
+      try {
+        await context.close();
+      } catch (_) {}
     }
     process.exit(1);
   }

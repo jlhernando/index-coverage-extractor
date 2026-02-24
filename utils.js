@@ -21,44 +21,19 @@ export const friendlySiteName = (str) => {
 };
 
 /**
- * Parse a date string and reformat it.
- * Supports DD/MM/YYYY and MM/DD/YYYY input formats.
- * @param {string} dateStr - Date string with / or - separators
- * @param {string} inputFormat - 'DD-MM-YYYY' or 'MM-DD-YYYY'
- * @param {string} outputFormat - 'DD-MM-YYYY' or 'MM-DD-YYYY'
+ * Format a Date object according to the specified format string.
+ * @param {Date} d - Date object
+ * @param {string} format - 'DD/MM/YYYY', 'MM/DD/YYYY', or 'YYYY-MM-DD'
  * @returns {string}
  */
-export const formatDate = (dateStr, inputFormat, outputFormat) => {
-  if (!dateStr || dateStr === 'No date') return dateStr;
-
-  // Normalize separators to /
-  const normalized = dateStr.replace(/-/g, '/');
-  const parts = normalized.split('/');
-  if (parts.length !== 3 || parts.some((p) => !/^\d+$/.test(p))) return dateStr;
-
-  let day, month, year;
-
-  if (inputFormat === 'MM-DD-YYYY') {
-    [month, day, year] = parts;
-  } else {
-    // Default: DD-MM-YYYY
-    [day, month, year] = parts;
-  }
-
-  // Pad single digits
-  day = day.padStart(2, '0');
-  month = month.padStart(2, '0');
-
-  // Handle 2-digit years
-  if (year.length === 2) {
-    year = `20${year}`;
-  }
-
-  if (outputFormat === 'MM-DD-YYYY') {
-    return `${month}-${day}-${year}`;
-  }
-  // Default output: DD-MM-YYYY
-  return `${day}-${month}-${year}`;
+export const formatDate = (d, format) => {
+  if (!d || !(d instanceof Date) || isNaN(d.getTime())) return '';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  if (format === 'MM/DD/YYYY') return `${mm}/${dd}/${yyyy}`;
+  if (format === 'YYYY-MM-DD') return `${yyyy}-${mm}-${dd}`;
+  return `${dd}/${mm}/${yyyy}`;
 };
 
 /**

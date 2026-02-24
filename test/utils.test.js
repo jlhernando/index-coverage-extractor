@@ -37,48 +37,36 @@ describe('friendlySiteName', () => {
 });
 
 describe('formatDate', () => {
-  it('parses European date and outputs European date', () => {
-    assert.equal(formatDate('15/06/2024', 'DD-MM-YYYY', 'DD-MM-YYYY'), '15-06-2024');
+  it('formats as DD/MM/YYYY', () => {
+    assert.equal(formatDate(new Date(2024, 5, 15), 'DD/MM/YYYY'), '15/06/2024');
   });
 
-  it('parses American date and outputs American date', () => {
-    assert.equal(formatDate('06/15/2024', 'MM-DD-YYYY', 'MM-DD-YYYY'), '06-15-2024');
+  it('formats as MM/DD/YYYY', () => {
+    assert.equal(formatDate(new Date(2024, 5, 15), 'MM/DD/YYYY'), '06/15/2024');
   });
 
-  it('converts American date to European date', () => {
-    assert.equal(formatDate('06/15/2024', 'MM-DD-YYYY', 'DD-MM-YYYY'), '15-06-2024');
+  it('formats as YYYY-MM-DD (ISO)', () => {
+    assert.equal(formatDate(new Date(2024, 5, 15), 'YYYY-MM-DD'), '2024-06-15');
   });
 
-  it('converts European date to American date', () => {
-    assert.equal(formatDate('15/06/2024', 'DD-MM-YYYY', 'MM-DD-YYYY'), '06-15-2024');
-  });
-
-  it('handles dash separators', () => {
-    assert.equal(formatDate('15-06-2024', 'DD-MM-YYYY', 'DD-MM-YYYY'), '15-06-2024');
-  });
-
-  it('handles 2-digit year', () => {
-    assert.equal(formatDate('15/06/24', 'DD-MM-YYYY', 'DD-MM-YYYY'), '15-06-2024');
+  it('defaults to DD/MM/YYYY when no format specified', () => {
+    assert.equal(formatDate(new Date(2024, 5, 15)), '15/06/2024');
   });
 
   it('pads single-digit day and month', () => {
-    assert.equal(formatDate('5/6/2024', 'DD-MM-YYYY', 'DD-MM-YYYY'), '05-06-2024');
+    assert.equal(formatDate(new Date(2024, 0, 5), 'DD/MM/YYYY'), '05/01/2024');
   });
 
-  it('returns original string for "No date"', () => {
-    assert.equal(formatDate('No date', 'DD-MM-YYYY', 'DD-MM-YYYY'), 'No date');
+  it('returns empty string for null', () => {
+    assert.equal(formatDate(null, 'DD/MM/YYYY'), '');
   });
 
-  it('returns original string for empty input', () => {
-    assert.equal(formatDate('', 'DD-MM-YYYY', 'DD-MM-YYYY'), '');
+  it('returns empty string for invalid date', () => {
+    assert.equal(formatDate(new Date('invalid'), 'DD/MM/YYYY'), '');
   });
 
-  it('returns original string for null', () => {
-    assert.equal(formatDate(null, 'DD-MM-YYYY', 'DD-MM-YYYY'), null);
-  });
-
-  it('returns original string for malformed date', () => {
-    assert.equal(formatDate('not-a-date', 'DD-MM-YYYY', 'DD-MM-YYYY'), 'not-a-date');
+  it('returns empty string for non-Date input', () => {
+    assert.equal(formatDate('not-a-date', 'DD/MM/YYYY'), '');
   });
 });
 
