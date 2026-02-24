@@ -38,7 +38,7 @@ npm start
 | Command | Description |
 |---------|-------------|
 | `npm start` | Run the extractor |
-| `npm test` | Run unit tests (29 tests) |
+| `npm test` | Run unit tests (26 tests) |
 | `npm run reset` | Clear browser session (to switch Google accounts) |
 
 ## Output
@@ -67,7 +67,7 @@ CSV files with the same data are also created in a folder named after each prope
 ├── report-names.js     # Maps GSC internal report IDs to human-readable names
 ├── utils.js            # Utility functions: date formatting, CSV conversion, site name helpers
 ├── test/
-│   └── utils.test.js   # 29 unit tests for utils.js (Node.js built-in test runner)
+│   └── utils.test.js   # 26 unit tests for utils.js (Node.js built-in test runner)
 ├── chrome-profile/     # Persistent Chrome session data (gitignored, created on first run)
 └── package.json
 ```
@@ -131,16 +131,24 @@ const sitemapExtract = false;
 
 ### Date format
 
-GSC shows dates in two formats depending on your locale: American (mm/dd/yyyy) or European (dd/mm/yyyy).
+The script prompts you to choose your preferred date format at startup:
 
-The default assumes European date format. If your GSC property shows American dates, change in `index.js`:
+- **DD/MM/YYYY** — European format (default)
+- **MM/DD/YYYY** — American format
+- **YYYY-MM-DD** — ISO format
 
-```js
-const americanDate = true;       // Your GSC shows American dates
-const americanDateChange = true; // Convert American dates to European format in output
-```
+GSC dates are automatically detected regardless of your locale (US or EU) and reformatted to your chosen format.
 
 ## Changelog
+
+### v3.1.0
+
+- **Multi-account support**: Automatically detects `/u/N/` URL prefix for users with multiple Google accounts. All GSC navigation now preserves the account context.
+- **Graceful error handling**: If extraction fails midway (timeout, network error, etc.), partial results are saved to `index-results_PARTIAL_{date}.xlsx` instead of being lost. Individual property failures no longer crash the entire run.
+- **Sitemap early-stop**: Stops extracting sitemaps after 3 consecutive empty ones, avoiding unnecessary requests and Google rate limits (429 errors).
+- **Google error page detection**: Detects 500/429 error pages via DOM inspection after each navigation. Previously the script would silently continue extracting from error pages.
+- **Configurable date format**: Interactive prompt to choose between DD/MM/YYYY, MM/DD/YYYY, or YYYY-MM-DD. Replaces the old `americanDate`/`americanDateChange` boolean settings. GSC dates are auto-detected regardless of locale.
+- **Robust count parsing**: Extracts real numbers from GSC's `title` attribute (e.g., `title="848,275"`) with K/M/B suffix fallback. Fixes the old single-comma `.replace(',', '')` bug that broke numbers over 999,999.
 
 ### v3.0.0
 
