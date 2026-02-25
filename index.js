@@ -23,6 +23,13 @@ let gscPathPrefix = ''; // Multi-account prefix (e.g., '/u/0') detected from cur
 const MAX_CONSECUTIVE_EMPTY = 3; // Stop sitemap extraction after N consecutive empty sitemaps
 
 /**
+ * Escape special regex characters in a string for safe use in `new RegExp(...)`.
+ */
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Build a GSC URL with multi-account prefix support.
  */
 function buildGscUrl(resource, page, extraParams = {}) {
@@ -88,7 +95,7 @@ function parseGscDateStr(dateStr) {
 
 // Asynchronous IIFE
 (async () => {
-  clack.intro(ansis.bgCyanBright(' GSC Index Coverage Extractor v3.1.0 '));
+  clack.intro(ansis.bgCyanBright(' GSC Index Coverage Extractor v3.1.1 '));
 
   let context;
   let totalUrls = 0;
@@ -356,9 +363,9 @@ function parseGscDateStr(dateStr) {
 
           // Extract available reports for property — scan ALL script blocks for report IDs
           const reportIDs = await page.evaluate(
-            ([prop]) => {
+            ([escapedProp]) => {
               var rawArray = Array.from(document.querySelectorAll('script[nonce]'), (el) => el.text);
-              var regex = new RegExp(`"${prop}",13,"([^"]+)"`, 'g');
+              var regex = new RegExp(`"${escapedProp}",13,"([^"]+)"`, 'g');
               var ids = new Set();
               for (var script of rawArray) {
                 for (var match of script.matchAll(regex)) ids.add(match[1]);
@@ -367,7 +374,7 @@ function parseGscDateStr(dateStr) {
               ids.forEach((id) => reports.push({ category: 'Not indexed/Warning', key: 'item_key', param: id }));
               return reports;
             },
-            [site],
+            [escapeRegex(site)],
           );
           sp.stop(`Found ${reportIDs.length} reports.`);
 

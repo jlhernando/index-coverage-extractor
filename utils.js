@@ -13,9 +13,12 @@ export const friendlySiteName = (str) => {
     .replace(/(sc-domain)/g, 'DOM')
     .replace(/\//g, '_')
     .replace(/\_$/g, '')
-    .replaceAll(/\.|:/g, '_');
+    .replaceAll(/\.|:/g, '_')
+    .replace(/[^\x20-\x7E]/g, '_') // Replace non-ASCII chars (accents, CJK, Cyrillic, etc.) with _
+    .replace(/_{2,}/g, '_') // Collapse consecutive underscores
+    .replace(/\_$/g, ''); // Remove trailing underscore again (may reappear after collapse)
 
-  const short = friendlystr.slice(0, 22); // To fit Excel tab char limit
+  const short = Array.from(friendlystr).slice(0, 22).join(''); // Safe Unicode truncation (won't split surrogate pairs)
 
   return { file: friendlystr, short };
 };

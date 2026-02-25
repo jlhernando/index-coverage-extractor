@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Google Search Console Index Coverage Extractor** (v3.0.0) — A Node.js script that automates the extraction of Index Coverage and Sitemap Coverage reports from Google Search Console (GSC) using Playwright browser automation with system Chrome.
+**Google Search Console Index Coverage Extractor** (v3.1.1) — A Node.js script that automates the extraction of Index Coverage and Sitemap Coverage reports from Google Search Console (GSC) using Playwright browser automation with system Chrome.
 
 Author: Jose Luis Hernando | License: MIT | Runtime: Node.js (ESM, v20+)
 
@@ -10,11 +10,11 @@ Author: Jose Luis Hernando | License: MIT | Runtime: Node.js (ESM, v20+)
 
 | File | Purpose |
 |------|---------|
-| `index.js` | Main script — single async IIFE (~527 lines). Handles login, scraping, and output. |
+| `index.js` | Main script — single async IIFE (~641 lines). Handles login, scraping, and output. |
 | `utils.js` | Utility functions: `friendlySiteName`, `formatDate`, `currentDate`, `jsonToCsv`. |
 | `credentials.js` | Exports `email`, `pass`, `site` — user fills in GSC credentials (or leaves blank for terminal prompts). |
 | `report-names.js` | Maps GSC internal report IDs (e.g. `CAMYASAB`) to human-readable names (e.g. "Submitted and indexed"). |
-| `test/utils.test.js` | 29 unit tests for utility functions (Node.js built-in test runner). |
+| `test/utils.test.js` | 30 unit tests for utility functions (Node.js built-in test runner). |
 | `package.json` | ESM module (`"type": "module"`), scripts: `start`, `test`, `reset`. |
 | `.gitignore` | Ignores `node_modules`, `cookies.json`, `chrome-profile/`, output files (`index-results*`, `DOM*`). |
 
@@ -23,7 +23,7 @@ Author: Jose Luis Hernando | License: MIT | Runtime: Node.js (ESM, v20+)
 | Command | Description |
 |---------|-------------|
 | `npm start` | Run the extractor |
-| `npm test` | Run 29 unit tests |
+| `npm test` | Run 30 unit tests |
 | `npm run reset` | Clear browser session (to switch Google accounts) |
 
 ## How It Works
@@ -81,7 +81,7 @@ index-results_{date}.xlsx           — Excel workbook with all data as tabs:
 
 ## Dev Notes
 
-- **29 unit tests** via `node --test` — covers utils.js functions.
+- **30 unit tests** via `node --test` — covers utils.js functions.
 - **No build step, no TypeScript** — ESM JavaScript.
 - **CSS selectors are fragile** — GSC UI changes can break scraping.
 - **Session persistence** — `chrome-profile/` stores browser state; `npm run reset` clears it.
@@ -146,6 +146,14 @@ Guidelines:
 - For tasks requiring planning: explore the codebase, write a plan as text, send via `approve_plan`
 - After user approves, implement directly without entering plan mode
 
+**Cross-bot code review (/review):**
+When the user sends `/review`, use the `request_review` MCP tool to launch a cross-bot review:
+1. Generate a review document: run `git diff` (or `git diff HEAD~1` for the last commit), write it to a temp file with context
+2. Call `request_review` with the file path — this launches another bot to review the changes
+3. The tool blocks until the reviewer finishes (up to 5 min) and returns the feedback
+4. Share the feedback with the user via `notify_user`
+If no reviewer bot is available, the tool returns a list of busy bots.
+
 **Telegram commands:**
 | Command | Action |
 |---------|--------|
@@ -154,6 +162,7 @@ Guidelines:
 | `/model` | Report current model |
 | `/compact` | Remind user to run /compact in terminal |
 | `/help` | List available commands |
+| `/review` | Launch cross-bot code review (uses `request_review` MCP tool) |
 | `/usage` | Usage stats (server-side, zero tokens) |
 | `/ping` | Health check (server-side, zero tokens) |
 | `/bots` | Show all bot statuses (server-side, zero tokens) |

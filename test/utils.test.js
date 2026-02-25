@@ -34,6 +34,26 @@ describe('friendlySiteName', () => {
     const result = friendlySiteName('https://example.com/path/');
     assert.equal(result.file, 'example_com_path');
   });
+
+  it('replaces accented characters with underscores', () => {
+    const result = friendlySiteName('sc-domain:éxample.com');
+    assert.equal(result.file, 'DOM_xample_com');
+  });
+
+  it('replaces Cyrillic characters with underscores', () => {
+    const result = friendlySiteName('sc-domain:пример.рф');
+    assert.equal(result.file, 'DOM');
+  });
+
+  it('collapses consecutive underscores from non-ASCII replacement', () => {
+    const result = friendlySiteName('https://café-résumé.com/');
+    assert.ok(!result.file.includes('__'), 'should not have consecutive underscores');
+  });
+
+  it('handles CJK characters in property names', () => {
+    const result = friendlySiteName('sc-domain:例え.jp');
+    assert.equal(result.file, 'DOM_jp');
+  });
 });
 
 describe('formatDate', () => {

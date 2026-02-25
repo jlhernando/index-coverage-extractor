@@ -38,7 +38,7 @@ npm start
 | Command | Description |
 |---------|-------------|
 | `npm start` | Run the extractor |
-| `npm test` | Run unit tests (26 tests) |
+| `npm test` | Run unit tests (30 tests) |
 | `npm run reset` | Clear browser session (to switch Google accounts) |
 
 ## Output
@@ -67,7 +67,7 @@ CSV files with the same data are also created in a folder named after each prope
 ├── report-names.js     # Maps GSC internal report IDs to human-readable names
 ├── utils.js            # Utility functions: date formatting, CSV conversion, site name helpers
 ├── test/
-│   └── utils.test.js   # 26 unit tests for utils.js (Node.js built-in test runner)
+│   └── utils.test.js   # 30 unit tests for utils.js (Node.js built-in test runner)
 ├── chrome-profile/     # Persistent Chrome session data (gitignored, created on first run)
 └── package.json
 ```
@@ -140,6 +140,13 @@ The script prompts you to choose your preferred date format at startup:
 GSC dates are automatically detected regardless of your locale (US or EU) and reformatted to your chosen format.
 
 ## Changelog
+
+### v3.1.1
+
+- **Non-Latin character support**: Properties with accented characters (é, ñ, ü), Cyrillic, CJK, or other non-ASCII characters in their URLs now work correctly. `friendlySiteName` replaces non-ASCII chars with underscores for safe filesystem paths. Consecutive underscores are collapsed.
+- **Regex escaping fix**: Report ID extraction now escapes regex-special characters (dots, brackets, etc.) in property names before building the search regex. Previously, dots in domain names were treated as wildcard matchers, and unusual characters could break extraction entirely.
+- **Safe Unicode truncation**: Excel tab name truncation now uses `Array.from()` instead of `.slice()` to avoid splitting surrogate pairs in Unicode strings.
+- **4 new unit tests** for non-Latin character handling in `friendlySiteName` (accented, Cyrillic, CJK, underscore collapsing). Total: 30 tests.
 
 ### v3.1.0
 

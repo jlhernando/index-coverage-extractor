@@ -4,3 +4,6 @@ cookies.json
 chrome-profile/
 index-results*
 DOM*
+credentials.js
+.mcp.json
+.claude/
