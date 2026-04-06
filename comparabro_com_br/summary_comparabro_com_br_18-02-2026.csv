@@ -1,0 +1,10 @@
+status,report name,# URLs extracted,total reported,extraction ratio
+Indexed,Indexed pages,1000,11796,0.084774499830451
+Not indexed/Warning,Blocked by robots.txt,1000,13260,0.07541478129713423
+Not indexed/Warning,Alternative page with proper canonical tag,1000,4549,0.21982853374367992
+Not indexed/Warning,Not found (404),170,170,1
+Not indexed/Warning,Soft 404,48,48,1
+Not indexed/Warning,Crawled - currently not indexed,1000,19063,0.05245764045533232
+Not indexed/Warning,Discovered – currently not indexed,1000,16131,0.06199243692269543
+Not indexed/Warning,"Duplicate, Google chose different canonical than user",16,16,1
+Not indexed/Warning,"Indexed, though blocked by robots.txt",1,1,1
